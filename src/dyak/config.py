@@ -52,6 +52,9 @@ class Config(BaseModel):
 
     aliases: dict[str, Role] = Field(default_factory=dict)
     overrides: Overrides = Field(default_factory=Overrides)
+    # Ручное указание пола для неоднозначных имён (T002): ФИО (как в таблице)
+    # → `м`/`ж`/`male`/`female`. Перекрывает автоопределение по отчеству/имени.
+    genders: dict[str, str] = Field(default_factory=dict)
 
 
 def load_config(path: Path | None) -> Config:
