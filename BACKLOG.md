@@ -182,3 +182,34 @@ BACKLOG.md, BOARD.md и CHANGELOG.md) + 1`. ID не переиспользует
   (CLI и GUI) корректно работает на больших объёмах и не искажает тайминги;
   целевой показатель (тысячи строк за <целевое время>) достигнут либо
   отклонение зафиксировано с причиной.
+
+- **T010** — [2026-06-22] Сборка Windows-бинарников через GitHub Actions
+  (после GUI T008). На каждый релиз — две версии: **setup-инсталлятор** и
+  **portable**. По образцу `mil_mapper` (там:
+  `.github/workflows/build-windows-installer.yml` + `SK42.spec` /
+  `SK42_portable.spec` + `installer.iss`):
+  - **Workflow** на `windows-latest`, триггер по тегу (`v*` / `[0-9]*`) +
+    `workflow_dispatch`; `VERSION` из имени тега (`github.ref_name`).
+  - **Сборка GUI** (T008) через **PyInstaller**: onedir-спека для
+    инсталлятора + отдельная спека для portable.
+  - **Setup** — Inno Setup (`iscc installer.iss`), per-user установка без
+    админ-прав (`{localappdata}`), RU/EN, иконка → `dyak-<version>-setup.exe`.
+  - **Portable** — собрать папку (exe + README + место под конфиг/вывод
+    рядом с программой), заархивировать → `dyak-<version>-portable.zip`.
+  - **Release** — `softprops/action-gh-release@v2` на тег, приложить оба
+    артефакта.
+  **Отличия от mil_mapper под наш стек:** mil_mapper на Poetry — у нас
+  **uv** (`uv sync`, `uv run pyinstaller`, кеш `.venv` по `uv.lock`);
+  сверить доступность PyInstaller-колёс под целевой Python (mil_mapper на
+  3.13; у нас 3.14 — при проблемах зафиксировать build-Python отдельно);
+  GUI на PySide6/Qt (T008) → проверить включение Qt-плагинов в бандл и его
+  размер. ADR T006 (без `[build-system]`) не мешает: PyInstaller собирает
+  из entry-скрипта.
+  **Зависит от T008** (нужен собранный GUI-вход). Инфра-задача с T-ID;
+  ADR при взятии (PyInstaller + Inno Setup, uv-адаптация workflow).
+  Acceptance (черновой): пуш тега `vX.Y.Z` запускает workflow на
+  `windows-latest`; PyInstaller собирает GUI; Inno Setup даёт
+  `dyak-X.Y.Z-setup.exe` (per-user, без админа); portable-zip
+  `dyak-X.Y.Z-portable.zip` (распаковал и запустил без установки); оба
+  артефакта прикреплены к GitHub Release; сборка воспроизводима из чистого
+  клона.
