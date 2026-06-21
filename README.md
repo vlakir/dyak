@@ -20,8 +20,20 @@
 
 ```bash
 uv sync                       # поставить зависимости
-uv run python src/main.py     # запустить
+
+# генерация документов (этап 0: подстановка без склонения)
+PYTHONPATH=src uv run python -m dyak generate \
+  --table employees.xlsx \
+  --template order.docx \
+  --out ./output \
+  --config dyak.yaml \
+  [--sheet "Лист1"]
 ```
+
+Конфиг `dyak.yaml` задаёт маппинг колонок таблицы на поля шаблона и
+шаблон имени выходного файла. Разметка docx-шаблона — на русском, в
+фигурных скобках Jinja: `{{ сотрудник.фамилия }}`, `{{ дата_начала }}`.
+Подробности — `CONCEPT.md` §8–§9.
 
 ## Зависимости
 
