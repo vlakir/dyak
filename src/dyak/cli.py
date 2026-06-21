@@ -8,20 +8,24 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from dyak.config import load_config
+from dyak.config import Config, load_config
 from dyak.errors import DyakError
+from dyak.inflection import PetrovichInflector, parse_gender
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
-from dyak.render.context import build_context
+from dyak.render.context import build_context, normalize_fullname_key
 from dyak.render.engine import (
     default_filename_template,
     render_document,
     render_filename,
 )
+
+if TYPE_CHECKING:
+    from dyak.domain import Gender
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +40,23 @@ _DEFAULT_CONFIG = Path('dyak.yaml')
 @app.callback()
 def _main() -> None:
     """Dyak — пакетная генерация кадровых документов с русским склонением."""
+
+
+def _gender_overrides(cfg: Config) -> dict[str, Gender]:
+    """Нормализовать секцию `genders` конфига в `ключ ФИО → Gender`."""
+    result: dict[str, Gender] = {}
+    for raw_name, raw_value in cfg.genders.items():
+        gender = parse_gender(raw_value)
+        if gender is not None:
+            result[normalize_fullname_key(raw_name)] = gender
+        else:
+            logger.warning(
+                'Неизвестное значение пола «%s» для «%s» в секции `genders` — '
+                'игнорирую (ожидается м/ж/муж/жен/male/female)',
+                raw_value,
+                raw_name,
+            )
+    return result
 
 
 def generate_documents(
@@ -58,10 +79,18 @@ def generate_documents(
             'имена файлов будут порядковыми (Документ_N.docx)',
         )
 
+    inflector = PetrovichInflector()
+    gender_overrides = _gender_overrides(cfg)
     used: set[str] = set()
     written: list[Path] = []
     for line, person in enumerate(data.people, start=1):
-        context = build_context(person, data.fullname_source)
+        context = build_context(
+            person,
+            fullname_source=data.fullname_source,
+            roles=data.roles,
+            inflector=inflector,
+            gender_overrides=gender_overrides,
+        )
         base = (
             f'Документ_{line}.docx'
             if name_template is None

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
+import pytest
 from docx import Document
 from openpyxl import Workbook
 from typer.testing import CliRunner
 
-from dyak.cli import app, generate_documents
+from dyak.cli import _gender_overrides, app, generate_documents
+from dyak.config import Config
+from dyak.domain import Gender
 
 _HEADERS = ['Фамилия', 'Имя', 'Отчество', 'Должность', 'Дата начала']
 _ROWS = [
@@ -177,3 +181,19 @@ def test_cli_generate_reports_error_on_header_collision(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 1
+
+
+def test_gender_overrides_parses_and_normalizes() -> None:
+    cfg = Config.model_validate({'genders': {'Ким Саша': 'ж', 'Иванов Пётр': 'м'}})
+    overrides = _gender_overrides(cfg)
+    assert overrides == {'ким саша': Gender.FEMALE, 'иванов пётр': Gender.MALE}
+
+
+def test_gender_overrides_warns_on_unparseable_value(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    cfg = Config.model_validate({'genders': {'Ким Саша': 'мужык'}})
+    with caplog.at_level(logging.WARNING):
+        overrides = _gender_overrides(cfg)
+    assert overrides == {}
+    assert any('мужык' in r.message for r in caplog.records)
