@@ -45,3 +45,6 @@ vanilla_docker.sh
 # Temp / docs builds
 temp/
 doc/
+
+# Сгенерированные документы примера
+examples/output/
