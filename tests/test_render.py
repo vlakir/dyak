@@ -1,63 +1,108 @@
-"""Тесты рендера контекста, имени файла и docx (этап 0, T001)."""
+"""Тесты контекста, имени файла, автопочинки пробелов и рендера docx (T006)."""
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
+import pytest
 from docx import Document
-from docxtpl import DocxTemplate
 
-from dyak.config import Config
 from dyak.domain import Person
 from dyak.render.context import build_context
-from dyak.render.engine import render_document, render_filename
-
-
-def _config() -> Config:
-    return Config.model_validate(
-        {
-            'columns': {
-                'surname': 'Фамилия',
-                'name': 'Имя',
-                'patronymic': 'Отчество',
-                'position': 'Должность',
-                'gender': 'Пол',
-            },
-            'filename': 'Приказ_{{ сотрудник.фамилия }}.docx',
-        },
-    )
+from dyak.render.engine import (
+    default_filename_template,
+    fix_jinja_spaces,
+    render_document,
+    render_filename,
+)
 
 
 def _person() -> Person:
     return Person(
-        surname='Иванов',
-        name='Пётр',
-        patronymic='Семёнович',
-        position='директор',
-        gender='м',
-        extra={'дата_начала': '01.07.2026'},
+        cells={
+            'Фамилия': 'Иванов',
+            'Имя': 'Пётр',
+            'Отчество': 'Семёнович',
+            'Должность': 'директор',
+            'Дата_начала': '01.07.2026',
+        },
     )
 
 
-def test_build_context_exposes_facade_and_extra() -> None:
+def test_build_context_is_flat_by_headers() -> None:
     ctx = build_context(_person())
-    assert ctx['сотрудник']['фамилия'] == 'Иванов'
-    assert ctx['сотрудник']['должность'] == 'директор'
-    assert ctx['дата_начала'] == '01.07.2026'
+    assert ctx['Фамилия'] == 'Иванов'
+    assert ctx['Должность'] == 'директор'
+    assert ctx['Дата_начала'] == '01.07.2026'
 
 
-def test_render_filename_substitutes_fields() -> None:
+def test_build_context_splits_fullname_into_parts() -> None:
+    person = Person(cells={'ФИО': 'Иванов Пётр Семёнович', 'Должность': 'директор'})
+    ctx = build_context(person, fullname_source='ФИО')
+    assert ctx['ФИО'] == 'Иванов Пётр Семёнович'  # целое остаётся доступным
+    assert ctx['Фамилия'] == 'Иванов'
+    assert ctx['Имя'] == 'Пётр'
+    assert ctx['Отчество'] == 'Семёнович'
+
+
+def test_build_context_fullname_two_words_has_no_patronymic() -> None:
+    person = Person(cells={'ФИО': 'Петрова Анна'})
+    ctx = build_context(person, fullname_source='ФИО')
+    assert ctx['Фамилия'] == 'Петрова'
+    assert ctx['Имя'] == 'Анна'
+    assert ctx['Отчество'] == ''
+
+
+def test_render_filename_substitutes_by_header() -> None:
     ctx = build_context(_person())
-    assert render_filename('Приказ_{{ сотрудник.фамилия }}.docx', ctx) == (
-        'Приказ_Иванов.docx'
+    assert render_filename('Приказ_{{ Фамилия }}.docx', ctx) == 'Приказ_Иванов.docx'
+
+
+def test_render_filename_fixes_forgotten_space(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ctx = build_context(_person())
+    with caplog.at_level(logging.WARNING):
+        name = render_filename('{{ Дата начала }}.docx', ctx)
+    assert name == '01.07.2026.docx'
+    assert any('Дата начала' in r.message for r in caplog.records)
+
+
+def test_fix_jinja_spaces_leaves_filter_expr_untouched() -> None:
+    # Тег с фильтром (форма T002) не трогается — пробелы там значимы.
+    assert fix_jinja_spaces('{{ ФИО | рд }}') == '{{ ФИО | рд }}'
+    # Управляющий блок тоже не трогается.
+    assert fix_jinja_spaces('{% for x in y %}') == '{% for x in y %}'
+
+
+def test_default_filename_template_from_roles() -> None:
+    roles = {'surname': 'Фамилия', 'name': 'Имя', 'patronymic': 'Отчество'}
+    tpl = default_filename_template(roles)
+    assert tpl is not None
+    assert render_filename(tpl, build_context(_person())) == (
+        'Иванов_Пётр_Семёнович.docx'
     )
+
+
+def test_default_filename_drops_empty_parts() -> None:
+    roles = {'surname': 'Фамилия', 'name': 'Имя', 'patronymic': 'Отчество'}
+    tpl = default_filename_template(roles)
+    assert tpl is not None
+    person = Person(cells={'Фамилия': 'Петрова', 'Имя': 'Анна', 'Отчество': ''})
+    # Пустое отчество не оставляет хвостового подчёркивания.
+    assert render_filename(tpl, build_context(person)) == 'Петрова_Анна.docx'
+
+
+def test_default_filename_template_none_without_roles() -> None:
+    assert default_filename_template({}) is None
 
 
 def test_render_document_substitutes_into_docx(tmp_path: Path) -> None:
     template = tmp_path / 'tpl.docx'
     doc = Document()
-    doc.add_paragraph('Назначить {{ сотрудник.фамилия }} {{ сотрудник.имя }}')
-    doc.add_paragraph('с {{ дата_начала }}.')
+    doc.add_paragraph('Назначить {{ Фамилия }} {{ Имя }}')
+    doc.add_paragraph('на {{ Должность }} с {{ Дата_начала }}.')
     doc.save(template)
 
     out = tmp_path / 'out.docx'
@@ -65,32 +110,59 @@ def test_render_document_substitutes_into_docx(tmp_path: Path) -> None:
 
     text = '\n'.join(p.text for p in Document(out).paragraphs)
     assert 'Назначить Иванов Пётр' in text
-    assert 'с 01.07.2026.' in text
+    assert 'на директор с 01.07.2026.' in text
 
 
-def test_render_document_runs_split_placeholder(tmp_path: Path) -> None:
-    # docxtpl должен склеивать плейсхолдер, разрезанный по run'ам.
+def test_render_document_collapses_double_space_from_empty_field(
+    tmp_path: Path,
+) -> None:
+    template = tmp_path / 'tpl.docx'
+    doc = Document()
+    doc.add_paragraph('Назначить {{ Фамилия }} {{ Имя }} {{ Отчество }} (готово)')
+    doc.save(template)
+
+    # Отчество пустое — между «Анна» и «(готово)» не должно остаться двойного
+    # пробела.
+    person = Person(cells={'Фамилия': 'Петрова', 'Имя': 'Анна', 'Отчество': ''})
+    out = tmp_path / 'out.docx'
+    render_document(template, build_context(person, fullname_source=None), out)
+
+    text = '\n'.join(p.text for p in Document(out).paragraphs)
+    assert 'Назначить Петрова Анна (готово)' in text
+    assert '  ' not in text
+
+
+def test_render_document_collapses_spaces_in_table_cells(tmp_path: Path) -> None:
+    template = tmp_path / 'tpl.docx'
+    doc = Document()
+    table = doc.add_table(rows=1, cols=1)
+    table.cell(0, 0).paragraphs[0].add_run('{{ Имя }} {{ Отчество }} конец')
+    doc.save(template)
+
+    person = Person(cells={'Имя': 'Анна', 'Отчество': ''})
+    out = tmp_path / 'out.docx'
+    render_document(template, build_context(person), out)
+
+    cell_text = Document(out).tables[0].cell(0, 0).text
+    assert cell_text == 'Анна конец'
+
+
+def test_render_document_fixes_run_split_tag_with_space(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Плейсхолдер с пробелом, разрезанный Word по run'ам, должен и склеиться,
+    # и починиться (пробел → подчёркивание) + warning.
     template = tmp_path / 'tpl.docx'
     doc = Document()
     para = doc.add_paragraph()
-    para.add_run('{{ сотрудник.')
-    para.add_run('фамилия }}')
+    para.add_run('{{ Дата ')
+    para.add_run('начала }}')
     doc.save(template)
 
     out = tmp_path / 'out.docx'
-    render_document(template, build_context(_person()), out)
+    with caplog.at_level(logging.WARNING):
+        render_document(template, build_context(_person()), out)
     text = '\n'.join(p.text for p in Document(out).paragraphs)
-    assert 'Иванов' in text
-
-
-def test_render_uses_template_object(tmp_path: Path) -> None:
-    # Контроль: DocxTemplate действительно рендерит наш контекст.
-    template = tmp_path / 'tpl.docx'
-    doc = Document()
-    doc.add_paragraph('{{ сотрудник.должность }}')
-    doc.save(template)
-    tpl = DocxTemplate(template)
-    tpl.render({'сотрудник': {'должность': 'директор'}})
-    out = tmp_path / 'o.docx'
-    tpl.save(out)
-    assert 'директор' in '\n'.join(p.text for p in Document(out).paragraphs)
+    assert '01.07.2026' in text
+    assert any('Дата начала' in r.message for r in caplog.records)

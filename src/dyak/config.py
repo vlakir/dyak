@@ -1,15 +1,21 @@
 """
 Конфигурация dyak: pydantic-схема и загрузка YAML.
 
-Соответствует разделу §9 ТЗ (`CONCEPT.md`). На этапе 0 (T001) реально
-используются `columns` и `filename`; `gender_values` и `overrides`
-валидируются для стабильности формата между этапами, но поведение к ним
-подключается в T002–T003.
+С T006 (ADR 2026-06-21) подстановка идёт напрямую по заголовкам колонок,
+поэтому `dyak.yaml` стал **опциональным**: обязательный маппинг `columns`,
+шаблон `filename` и колонка `gender` упразднены. Остаются две опциональные
+секции:
+
+- `aliases` — нестандартный заголовок → роль (surname/name/patronymic/
+  position) для распознавания склоняемых колонок;
+- `overrides` — ручные формы склонения (потребляются в T002–T003).
+
+Если файла нет — используется пустая конфигурация (нулевой порог входа).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,43 +23,12 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Дефолтные распознаваемые значения колонки пола (§9).
-_DEFAULT_MALE = ['м', 'муж', 'мужской']
-_DEFAULT_FEMALE = ['ж', 'жен', 'женский']
+# Роль склоняемой колонки (совпадает с константами в columns.py).
+# `fullname` — одна колонка «ФИО», разбираемая на фамилию/имя/отчество.
+Role = Literal['surname', 'name', 'patronymic', 'position', 'fullname']
 
 # Падежные формы одного слова: русское сокращение падежа → форма.
 CaseForms = dict[str, str]
-
-
-class ColumnMap(BaseModel):
-    """
-    Маппинг доменных полей на заголовки колонок таблицы.
-
-    Пять полей обязательны; любые дополнительные колонки (даты, номера
-    приказов и т.п.) допускаются и доступны в шаблоне по русскому
-    имени-ключу.
-    """
-
-    model_config = ConfigDict(extra='allow')
-
-    surname: str
-    name: str
-    patronymic: str
-    position: str
-    gender: str
-
-    def extra_fields(self) -> dict[str, str]:
-        """Дополнительные колонки сверх обязательных пяти."""
-        return {key: str(value) for key, value in (self.model_extra or {}).items()}
-
-
-class GenderValues(BaseModel):
-    """Распознавание значений колонки пола."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    male: list[str] = Field(default_factory=lambda: list(_DEFAULT_MALE))
-    female: list[str] = Field(default_factory=lambda: list(_DEFAULT_FEMALE))
 
 
 class Overrides(BaseModel):
@@ -66,17 +41,22 @@ class Overrides(BaseModel):
 
 
 class Config(BaseModel):
-    """Корневая конфигурация (`dyak.yaml`)."""
+    """
+    Корневая конфигурация (`dyak.yaml`), целиком опциональная.
+
+    `aliases` — привязка нестандартных заголовков к ролям; `overrides` —
+    ручные формы склонения для T002–T003.
+    """
 
     model_config = ConfigDict(extra='forbid')
 
-    columns: ColumnMap
-    filename: str
-    gender_values: GenderValues = Field(default_factory=GenderValues)
+    aliases: dict[str, Role] = Field(default_factory=dict)
     overrides: Overrides = Field(default_factory=Overrides)
 
 
-def load_config(path: Path) -> Config:
-    """Прочитать и провалидировать `dyak.yaml`."""
-    raw = yaml.safe_load(path.read_text(encoding='utf-8'))
+def load_config(path: Path | None) -> Config:
+    """Прочитать `dyak.yaml`; при отсутствии файла вернуть пустой конфиг."""
+    if path is None or not path.exists():
+        return Config()
+    raw = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
     return Config.model_validate(raw)

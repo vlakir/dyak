@@ -1,5 +1,5 @@
 """
-CLI dyak (typer). Этап 0 (T001): команда `generate`.
+CLI dyak (typer). T006: команда `generate` — подстановка по заголовкам колонок.
 
 Команды `check` и `init` появляются в T004/T005.
 """
@@ -17,7 +17,11 @@ from dyak.errors import DyakError
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
 from dyak.render.context import build_context
-from dyak.render.engine import render_document, render_filename
+from dyak.render.engine import (
+    default_filename_template,
+    render_document,
+    render_filename,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +42,32 @@ def generate_documents(
     table: Path,
     template: Path,
     out: Path,
-    config: Path,
+    config: Path | None,
     sheet: str | None,
+    filename: str | None,
 ) -> list[Path]:
     """Сгенерировать по документу на строку таблицы. Вернуть пути файлов."""
     cfg = load_config(config)
-    people = read_table(table, cfg, sheet)
+    data = read_table(table, cfg, sheet)
     out.mkdir(parents=True, exist_ok=True)
+
+    name_template = filename or default_filename_template(data.roles)
+    if name_template is None:
+        logger.warning(
+            'Не заданы --filename и не распознаны колонки ФИО — '
+            'имена файлов будут порядковыми (Документ_N.docx)',
+        )
 
     used: set[str] = set()
     written: list[Path] = []
-    for person in people:
-        context = build_context(person)
-        name = unique_filename(render_filename(cfg.filename, context), used)
+    for line, person in enumerate(data.people, start=1):
+        context = build_context(person, data.fullname_source)
+        base = (
+            f'Документ_{line}.docx'
+            if name_template is None
+            else render_filename(name_template, context)
+        )
+        name = unique_filename(base, used)
         target = out / name
         render_document(template, context, target)
         written.append(target)
@@ -72,11 +89,18 @@ def generate(
     out: Annotated[Path, typer.Option(help='Каталог для результатов')],
     config: Annotated[
         Path | None,
-        typer.Option(help='Конфиг dyak.yaml (по умолчанию ./dyak.yaml)'),
+        typer.Option(help='Опциональный dyak.yaml (по умолчанию ./dyak.yaml)'),
     ] = None,
     sheet: Annotated[
         str | None,
         typer.Option(help='Имя листа (по умолчанию активный)'),
+    ] = None,
+    filename: Annotated[
+        str | None,
+        typer.Option(
+            help='Шаблон имени файла (по умолчанию по колонкам ФИО), '
+            'напр. "Приказ_{{ Номер_приказа }}_{{ Фамилия }}.docx"',
+        ),
     ] = None,
 ) -> None:
     """Сгенерировать набор документов из таблицы и шаблона."""
@@ -87,6 +111,7 @@ def generate(
             out,
             config or _DEFAULT_CONFIG,
             sheet,
+            filename,
         )
     except DyakError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)
