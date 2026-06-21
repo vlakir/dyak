@@ -28,6 +28,9 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 <!-- Что накопилось с момента последнего релиза/значимой точки. -->
 
 ### Added
+- CI: GitHub Actions workflow `.github/workflows/ci.yml` — прогон
+  `ruff check` + `ruff format --check` + `mypy src` + `pytest` на
+  Python 3.14 при push в `main` и на каждый PR (ветка `rules/ci`).
 - Каркас проекта по методике dreamteam: ТЗ в `CONCEPT.md`, ADR в
   `DECISIONS.md`, задачи T001–T005.
 - Этап 0 «Скелет» (T001): команда `generate` — пайплайн «таблица →
