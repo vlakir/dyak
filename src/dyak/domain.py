@@ -41,6 +41,9 @@ RUS_CASE: dict[str, Case] = {
     'пр': Case.LOCT,
 }
 
+# Обратный мост: падеж → русское сокращение (для поиска override-форм).
+CASE_RUS: dict[Case, str] = {case: rus for rus, case in RUS_CASE.items()}
+
 
 @dataclass(frozen=True, slots=True)
 class Person:

@@ -23,14 +23,16 @@ from dyak.columns import (
     KEY_SURNAME,
     NAME,
     PATRONYMIC,
+    POSITION,
     SURNAME,
     split_fullname,
 )
-from dyak.inflection import Fio, NamePart, detect_gender
+from dyak.inflection import Fio, NamePart, Position, detect_gender
 
 if TYPE_CHECKING:
+    from dyak.config import CaseForms
     from dyak.domain import Gender, Person
-    from dyak.inflection import PetrovichInflector
+    from dyak.inflection import PetrovichInflector, PymorphyInflector
 
 # Канонический ключ целого ФИО в контексте (`{{ ФИО | вн }}`).
 KEY_FULLNAME = 'ФИО'
@@ -41,15 +43,15 @@ _WHITESPACE = re.compile(r'\s+')
 _PART_KEYS = {SURNAME: KEY_SURNAME, NAME: KEY_NAME, PATRONYMIC: KEY_PATRONYMIC}
 
 
-def normalize_fullname_key(text: str) -> str:
-    """Нормализовать ФИО к ключу поиска ручного пола (нижний регистр, пробелы)."""
+def normalize_lookup_key(text: str) -> str:
+    """Нормализовать текст к ключу поиска override (нижний регистр, пробелы)."""
     return _WHITESPACE.sub(' ', text).strip().lower()
 
 
 def _fullname_key(surname: str, name: str, patronymic: str) -> str:
     """Нормализованный ключ ФИО для поиска ручного пола в `gender_overrides`."""
     joined = ' '.join(part for part in (surname, name, patronymic) if part)
-    return normalize_fullname_key(joined)
+    return normalize_lookup_key(joined)
 
 
 def _part_texts(
@@ -67,34 +69,20 @@ def _part_texts(
     )
 
 
-def build_context(
+def _add_fio(
+    context: dict[str, object],
     person: Person,
-    *,
-    fullname_source: str | None = None,
-    roles: dict[str, str] | None = None,
-    inflector: PetrovichInflector | None = None,
-    gender_overrides: dict[str, Gender] | None = None,
-) -> dict[str, object]:
-    """Построить контекст; при наличии `inflector` — со склоняемыми ФИО."""
-    context: dict[str, object] = dict(person.cells)
-    roles = roles or {}
-
+    roles: dict[str, str],
+    fullname_source: str | None,
+    inflector: PetrovichInflector,
+    gender_overrides: dict[str, Gender],
+) -> None:
+    """Положить склоняемые ФИО (`NamePart`/`Fio`) в контекст (если есть)."""
     surname_t, name_t, patronymic_t = _part_texts(person, roles, fullname_source)
-
-    # Старый путь (без движка): части ФИО — простыми строками (поведение T006).
-    if inflector is None:
-        if fullname_source is not None:
-            context[KEY_SURNAME] = surname_t
-            context[KEY_NAME] = name_t
-            context[KEY_PATRONYMIC] = patronymic_t
-        return context
-
     if not (surname_t or name_t or patronymic_t):
-        return context  # в строке нет ФИО — склонять нечего
+        return  # в строке нет ФИО — склонять нечего
 
-    override = (gender_overrides or {}).get(
-        _fullname_key(surname_t, name_t, patronymic_t)
-    )
+    override = gender_overrides.get(_fullname_key(surname_t, name_t, patronymic_t))
     gender = detect_gender(name_t, patronymic_t, override=override)
 
     parts = {
@@ -114,4 +102,56 @@ def build_context(
         for role, key in roles.items():
             if role in parts:
                 context[key] = parts[role]
+
+
+def _add_position(
+    context: dict[str, object],
+    person: Person,
+    roles: dict[str, str],
+    inflector: PymorphyInflector,
+    position_overrides: dict[str, CaseForms],
+) -> None:
+    """Положить склоняемую должность (`Position`) под её колонку (если есть)."""
+    key = roles.get(POSITION)
+    if key is None:
+        return
+    text = person.cells.get(key, '')
+    if not text:
+        return
+    forms = position_overrides.get(normalize_lookup_key(text), {})
+    context[key] = Position(text, inflector, forms)
+
+
+def build_context(
+    person: Person,
+    *,
+    fullname_source: str | None = None,
+    roles: dict[str, str] | None = None,
+    inflector: PetrovichInflector | None = None,
+    gender_overrides: dict[str, Gender] | None = None,
+    position_inflector: PymorphyInflector | None = None,
+    position_overrides: dict[str, CaseForms] | None = None,
+) -> dict[str, object]:
+    """Построить контекст; при наличии движков — со склоняемыми ФИО/должностью."""
+    context: dict[str, object] = dict(person.cells)
+    roles = roles or {}
+
+    if inflector is None:
+        # Старый путь (без движка ФИО): части — строками (поведение T006).
+        if fullname_source is not None:
+            surname_t, name_t, patronymic_t = _part_texts(
+                person, roles, fullname_source
+            )
+            context[KEY_SURNAME] = surname_t
+            context[KEY_NAME] = name_t
+            context[KEY_PATRONYMIC] = patronymic_t
+    else:
+        _add_fio(
+            context, person, roles, fullname_source, inflector, gender_overrides or {}
+        )
+
+    if position_inflector is not None:
+        _add_position(
+            context, person, roles, position_inflector, position_overrides or {}
+        )
     return context

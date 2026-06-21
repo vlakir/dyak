@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from dyak.domain import Case, Gender, Person
-from dyak.inflection import PetrovichInflector
-from dyak.render.context import build_context, normalize_fullname_key
+from dyak.inflection import PetrovichInflector, PymorphyInflector
+from dyak.render.context import build_context, normalize_lookup_key
 from dyak.render.filters import build_jinja_env, make_case_filter
 
 
@@ -81,7 +81,7 @@ def test_context_builds_fio_from_fullname_column(inflector: PetrovichInflector) 
 def test_context_gender_override_applies(inflector: PetrovichInflector) -> None:
     # «Саша Ким» неоднозначно — override делает женский (фамилия не склоняется).
     person = Person(cells={'Фамилия': 'Ким', 'Имя': 'Саша', 'Отчество': ''})
-    overrides = {normalize_fullname_key('Ким Саша'): Gender.FEMALE}
+    overrides = {normalize_lookup_key('Ким Саша'): Gender.FEMALE}
     ctx = build_context(
         person,
         roles={'surname': 'Фамилия', 'name': 'Имя', 'patronymic': 'Отчество'},
@@ -96,3 +96,24 @@ def test_context_without_name_roles_stays_flat(inflector: PetrovichInflector) ->
     ctx = build_context(person, roles={}, inflector=inflector)
     assert ctx == {'Дата_начала': '01.07.2026', 'Номер': '17'}
     assert 'ФИО' not in ctx
+
+
+def test_position_declines_in_template(inflector: PetrovichInflector) -> None:
+    # T003: должность под падежным фильтром склоняется (раньше проходила как есть).
+    ctx = _ctx(inflector, position_inflector=PymorphyInflector())
+    env = build_jinja_env()
+    tpl = env.from_string('на должность {{ Должность | рд }}')
+    assert tpl.render(ctx) == 'на должность директора'
+
+
+def test_position_override_applies_in_context(inflector: PetrovichInflector) -> None:
+    person = Person(cells={'Должность': 'заместитель генерального директора'})
+    key = normalize_lookup_key('Заместитель генерального директора')
+    ctx = build_context(
+        person,
+        roles={'position': 'Должность'},
+        inflector=inflector,
+        position_inflector=PymorphyInflector(),
+        position_overrides={key: {'дт': 'заместителю генерального директора'}},
+    )
+    assert ctx['Должность'].inflect(Case.DATV) == 'заместителю генерального директора'
