@@ -1,18 +1,22 @@
 """
-Чтение входной таблицы xlsx с маппингом колонок и валидацией (§11).
+Чтение входной таблицы xlsx (T006).
 
-Этап 0 (T001): значения колонок читаются как строки ровно как в ячейке
-(§12). Предполагается, что даты и номера в таблице введены текстом —
-openpyxl тогда возвращает их строкой без переформатирования.
+Колонки читаются по их заголовкам: заголовок нормализуется (пробелы → `_`)
+и становится ключом контекста. Обязательного маппинга больше нет —
+стандартные кадровые колонки распознаются по названию (`columns.recognize_roles`),
+прочие доступны в шаблоне по нормализованному имени. Значения берутся как
+строки ровно как в ячейке (§12): даты/номера, введённые текстом, openpyxl
+возвращает без переформатирования.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from openpyxl import load_workbook
 
-from dyak.domain import Person
+from dyak.columns import normalize_header, recognize
+from dyak.domain import Person, Table
 from dyak.errors import TableError
 
 if TYPE_CHECKING:
@@ -22,9 +26,6 @@ if TYPE_CHECKING:
     from openpyxl.worksheet.worksheet import Worksheet
 
     from dyak.config import Config
-
-# Доменное поле Person → атрибут заголовка в config.columns.
-_REQUIRED_FIELDS = ('surname', 'name', 'patronymic', 'position', 'gender')
 
 
 def _to_str(value: object) -> str:
@@ -49,8 +50,31 @@ def _select_sheet(wb: Workbook, sheet: str | None) -> Worksheet:
     return wb[sheet]
 
 
-def read_table(path: Path, config: Config, sheet: str | None = None) -> list[Person]:
-    """Прочитать xlsx в список `Person` согласно `config.columns`."""
+def _build_columns(header_row: tuple[object, ...]) -> list[tuple[int, str]]:
+    """Сопоставить индексам колонок нормализованные ключи; ловить коллизии."""
+    columns: list[tuple[int, str]] = []
+    seen: dict[str, str] = {}  # нормализованный ключ → исходный заголовок
+    for idx, raw in enumerate(header_row):
+        if raw is None:
+            continue
+        raw_str = str(raw)
+        key = normalize_header(raw_str)
+        if key in seen and seen[key] != raw_str:
+            msg = (
+                f'Колонки «{seen[key]}» и «{raw_str}» дают одинаковый ключ '
+                f'«{key}» после нормализации пробелов'
+            )
+            raise TableError(msg)
+        seen[key] = raw_str
+        columns.append((idx, key))
+    if not columns:
+        msg = 'В строке заголовков нет ни одной колонки'
+        raise TableError(msg)
+    return columns
+
+
+def read_table(path: Path, config: Config, sheet: str | None = None) -> Table:
+    """Прочитать xlsx в `Table` (роли колонок + строки по заголовкам)."""
     wb = load_workbook(path, read_only=True, data_only=True)
     try:
         return _read_rows(_select_sheet(wb, sheet), config)
@@ -58,34 +82,26 @@ def read_table(path: Path, config: Config, sheet: str | None = None) -> list[Per
         wb.close()
 
 
-def _read_rows(ws: Worksheet, config: Config) -> list[Person]:
+def _read_rows(ws: Worksheet, config: Config) -> Table:
     rows = ws.iter_rows(values_only=True)
     header_row = next(rows, None)
     if header_row is None:
         msg = 'Таблица пуста: нет строки заголовков'
         raise TableError(msg)
 
-    header_index = {str(h): i for i, h in enumerate(header_row) if h is not None}
-    required_titles = {f: getattr(config.columns, f) for f in _REQUIRED_FIELDS}
-    extra_titles = config.columns.extra_fields()  # русский ключ → заголовок
-
-    for title in (*required_titles.values(), *extra_titles.values()):
-        if title not in header_index:
-            msg = f'В таблице не найдена колонка: {title}'
-            raise TableError(msg)
-
-    def cell(row: tuple[Any, ...], title: str) -> str:
-        idx = header_index[title]
-        return _to_str(row[idx]) if idx < len(row) else ''
+    columns = _build_columns(header_row)
+    recognition = recognize([key for _, key in columns], config.aliases)
 
     people: list[Person] = []
-    for line, row in enumerate(rows, start=2):
-        values = {f: cell(row, title) for f, title in required_titles.items()}
-        for field_name, value in values.items():
-            if value == '':
-                title = required_titles[field_name]
-                msg = f'Пустая обязательная ячейка «{title}» в строке {line}'
-                raise TableError(msg)
-        extra = {key: cell(row, title) for key, title in extra_titles.items()}
-        people.append(Person(extra=extra, **values))
-    return people
+    for row in rows:
+        cells = {
+            key: _to_str(row[idx]) if idx < len(row) else '' for idx, key in columns
+        }
+        if all(value == '' for value in cells.values()):
+            continue  # пропускаем полностью пустые строки (хвост листа)
+        people.append(Person(cells=cells))
+    return Table(
+        roles=recognition.roles,
+        fullname_source=recognition.fullname_source,
+        people=people,
+    )

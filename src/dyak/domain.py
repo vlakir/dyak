@@ -1,28 +1,41 @@
 """
 Доменная модель dyak.
 
-Этап 0 (T001): `Person` — плоская запись таблицы, все значения строки.
-Структурные `Fio`/`Position`/`Gender` и склонение (`Declinable`)
-добавляются в T002–T003 поверх этой модели, не ломая её.
+T006: контекст строится по заголовкам колонок, поэтому `Person` стал плоским
+словарём «нормализованный заголовок → значение ячейки», а распознанные роли
+колонок вынесены в `Table`. Структурные `Fio`/`Position` и склонение
+(`Declinable`) добавятся в T002–T003 поверх ролей, не ломая эту модель.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
 class Person:
     """
-    Одна строка таблицы сотрудников.
+    Одна строка таблицы как плоский контекст для шаблона.
 
-    `extra` — дополнительные колонки (даты, номера приказов и т.п.),
-    доступные в шаблоне по русскому имени-ключу из `config.columns`.
+    `cells` — `нормализованный заголовок → строковое значение ячейки`.
+    Доступ в шаблоне идёт по этим ключам напрямую: `{{ Фамилия }}`,
+    `{{ Дата_начала }}`.
     """
 
-    surname: str
-    name: str
-    patronymic: str
-    position: str
-    gender: str
-    extra: dict[str, str] = field(default_factory=dict)
+    cells: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class Table:
+    """
+    Прочитанная таблица: распознанные роли колонок + строки.
+
+    `roles` — `роль (surname/name/patronymic/position) → ключ контекста`;
+    фундамент маршрутизации склонения в T002 и сборки дефолтного имени файла.
+    `fullname_source` — ключ колонки «ФИО», которую надо разбирать построчно
+    на фамилию/имя/отчество (либо `None`). `people` — строки данных.
+    """
+
+    roles: dict[str, str]
+    fullname_source: str | None
+    people: list[Person]
