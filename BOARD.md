@@ -68,6 +68,17 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
 <!-- Закрытые задачи, ждущие переноса в CHANGELOG.md при следующем
      релизе или значимой точке. После переноса — очищаем. -->
 
+- **T012** — Этап 4b «Опции: PDF»: флаг `generate --pdf` — конвертация
+  docx → PDF через LibreOffice headless (батч `soffice --convert-to pdf`),
+  кросс-платформенный поиск `soffice`, graceful degrade при отсутствии
+  (ветка `T012-pdf-export`). [closed 2026-06-22, текущий PR]
+  Acceptance ✓: `--pdf` кладёт pdf рядом с docx (проверено на реальном
+  LibreOffice 26.2); `soffice` ищется в PATH и типичных путях
+  (Linux/macOS/Windows, Windows — юнит-тест с mock env); LibreOffice не
+  найден → понятная ошибка + код 1 без трейсбека, docx всё равно создан;
+  прямой вызов `soffice`, не `docx2pdf` (ADR). 4 проверки зелёные,
+  coverage 93%.
+
 - **T013** — Этап 4c «Опции: прогресс + контракт CLI↔GUI»: живой
   `rich`-бар при `generate` (TTY) + машиночитаемый JSONL в stderr по
   `--progress-json` (контракт для GUI T008), события

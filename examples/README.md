@@ -107,6 +107,24 @@ PYTHONPATH=src uv run python -m dyak generate \
 {"event": "done", "ok": 3, "failed": 0}
 ```
 
+## PDF-экспорт (T012)
+
+Если нужен ещё и PDF — добавь флаг `--pdf`: рядом с каждым docx ляжет
+PDF, сконвертированный через LibreOffice (`soffice --headless`):
+
+```bash
+PYTHONPATH=src uv run python -m dyak generate \
+  --table examples/employees.xlsx \
+  --template examples/order_template.docx \
+  --out examples/output \
+  --pdf
+```
+
+Нужен установленный **LibreOffice** (Linux/macOS/Windows; ищется в PATH и
+типичных путях установки). Если его нет — `generate --pdf` завершится
+понятной ошибкой и кодом 1 (docx при этом успеют сгенерироваться), а не
+трейсбеком.
+
 ## Сухой прогон перед генерацией
 
 Перед генерацией сотен файлов прогони проверку — она рендерит всё в
@@ -177,6 +195,6 @@ PYTHONPATH=src uv run python -m dyak check \
 Реализован и **старт с нуля** (T005): команда `dyak init` выкладывает
 готовый scaffold-набор (см. раздел «Старт с нуля» выше).
 
-Этап 4 «Опции» разбит на T005 (init, готово), T013 (прогресс +
-машиночитаемый JSONL для GUI, готово — см. «Прогресс на больших
-объёмах») и T012 (PDF-экспорт через LibreOffice — впереди).
+Этап 4 «Опции» завершён: T005 (init), T013 (прогресс + машиночитаемый
+JSONL для GUI) и T012 (PDF-экспорт через LibreOffice) — все готовы
+(см. разделы «Старт с нуля», «Прогресс на больших объёмах», «PDF-экспорт»).
