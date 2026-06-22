@@ -17,6 +17,7 @@ from dyak.render.engine import (
     render_document,
     render_filename,
 )
+from dyak.render.filters import EMPTY_MARKER
 
 
 def _person() -> Person:
@@ -183,3 +184,58 @@ def test_render_document_raises_on_undefined_variable(tmp_path: Path) -> None:
 def test_render_filename_raises_on_undefined_variable() -> None:
     with pytest.raises(TemplateError, match='НетТакого'):
         render_filename('{{ НетТакого }}.docx', {'Фамилия': 'Иванов'})
+
+
+# --- T016 фаза C: empty-aware чистка пробелов и висячей пунктуации -------------
+
+
+def _render_body(tmp_path: Path, body: str, cells: dict[str, str]) -> str:
+    template = tmp_path / 'tpl.docx'
+    doc = Document()
+    doc.add_paragraph(body)
+    doc.save(template)
+    out = tmp_path / 'out.docx'
+    render_document(template, build_context(Person(cells=cells)), out)
+    return Document(out).paragraphs[0].text
+
+
+def test_empty_value_drops_dangling_terminator_keeps_label(tmp_path: Path) -> None:
+    # «Звание: ▮.» → «Звание:» (висячая точка убрана, лейбл остаётся).
+    assert _render_body(tmp_path, 'Звание: {{ Звание }}.', {'Звание': ''}) == 'Звание:'
+
+
+def test_empty_value_keeps_separator_comma(tmp_path: Path) -> None:
+    # Запятая-разделитель сохраняется, пробел перед ней убирается.
+    text = _render_body(tmp_path, 'Оклад {{ Премия }}, надбавка.', {'Премия': ''})
+    assert text == 'Оклад, надбавка.'
+
+
+def test_empty_first_value_trims_leading_space(tmp_path: Path) -> None:
+    text = _render_body(tmp_path, '{{ Звание }} Петров назначен.', {'Звание': ''})
+    assert text == 'Петров назначен.'
+
+
+def test_nonempty_value_keeps_terminator(tmp_path: Path) -> None:
+    text = _render_body(tmp_path, 'Звание: {{ Звание }}.', {'Звание': 'майор'})
+    assert text == 'Звание: майор.'
+
+
+def test_legitimate_terminator_not_removed(tmp_path: Path) -> None:
+    # Нет пустых подстановок — точка в конце предложения не трогается.
+    text = _render_body(tmp_path, 'Иванов окончил институт.', {})
+    assert text == 'Иванов окончил институт.'
+
+
+def test_empty_value_does_not_touch_dash(tmp_path: Path) -> None:
+    # Тире (не закрывающая пунктуация) не затрагивается; ведущий пробел убран.
+    text = _render_body(tmp_path, '{{ Звание }} — Петров', {'Звание': ''})
+    assert text == '— Петров'
+
+
+def test_filename_strips_empty_marker(tmp_path: Path) -> None:
+    # Маркер пустой подстановки не должен попасть в имя файла.
+    name = render_filename(
+        'Приказ_{{ Звание }}.docx', build_context(Person(cells={'Звание': ''}))
+    )
+    assert EMPTY_MARKER not in name
+    assert name == 'Приказ_.docx'

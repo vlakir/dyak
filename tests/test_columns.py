@@ -1,4 +1,4 @@
-"""Тесты распознавания колонок, разбора ФИО и нормализации (T006)."""
+"""Тесты распознавания колонок, разбора ФИО и нормализации (T006 + T016)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,13 @@ import logging
 
 import pytest
 
-from dyak.columns import normalize_header, recognize, split_fullname
+from dyak.columns import (
+    infer_role,
+    normalize_header,
+    recognize,
+    split_fullname,
+)
+from dyak.inflection.morph import get_analyzer
 
 
 def test_normalize_collapses_spaces() -> None:
@@ -105,3 +111,125 @@ def test_fullname_not_split_when_separate_columns_present(
     assert rec.roles['surname'] == 'Фамилия'
     assert rec.roles['name'] == 'Имя'
     assert any('ФИО' in r.message for r in caplog.records)
+
+
+# --- T016: контентное распознавание ролей по содержимому ----------------------
+
+
+@pytest.mark.parametrize(
+    ('value', 'expected'),
+    [
+        ('Иванов', 'surname'),
+        ('Пётр', 'name'),
+        ('Семёнович', 'patronymic'),
+        ('директор', 'position'),
+        ('главный бухгалтер', 'position'),
+        ('майор', 'rank'),
+        ('капитан 3 ранга', 'rank'),
+        ('контр-адмирал', 'rank'),
+        ('12.05.2020', None),  # дата → не роль склонения
+        ('2020-05-12', None),
+        ('1234567', 'personal_number'),
+        ('АА-123456', 'personal_number'),
+        ('Иванов Пётр Семёнович', 'fullname'),
+        ('Шевченко', 'surname'),  # несклоняемая — роль всё равно verna
+        ('Дюма', 'surname'),
+        ('', None),
+    ],
+)
+def test_infer_role_single_sample(value: str, expected: str | None) -> None:
+    guess = infer_role([value], get_analyzer())
+    assert guess.role == expected
+
+
+def test_infer_role_majority_and_confidence() -> None:
+    samples = ['Иванов', 'Петров', 'Сидоров', 'директор']
+    guess = infer_role(samples, get_analyzer())
+    assert guess.role == 'surname'
+    assert guess.confident is True  # 3/4 ≥ 0.6
+    assert guess.unanimous is False
+    assert guess.n == len(samples)
+
+
+def test_infer_role_empty_samples() -> None:
+    guess = infer_role(['', '   '], get_analyzer())
+    assert guess.role is None
+    assert guess.n == 0
+
+
+def test_content_recognizes_nonstandard_headers_without_aliases() -> None:
+    # Заголовки незнакомы словарю синонимов — роль по содержимому.
+    samples = {
+        'Сотрудник': [
+            'Иванов Пётр Семёнович',
+            'Петрова Анна Сергеевна',
+            'Ким Олег Викторович',
+        ],
+        'Наименование_должности': ['директор', 'бухгалтер', 'инженер'],
+        'Дата_приказа': ['12.05.2020', '13.05.2020', '14.05.2020'],
+    }
+    rec = recognize(list(samples), {}, samples)
+    assert rec.fullname_source == 'Сотрудник'
+    assert rec.roles['position'] == 'Наименование_должности'
+    assert rec.roles['surname'] == 'Фамилия'  # разбор ФИО
+    assert 'Дата_приказа' not in rec.roles.values()  # дата без роли
+
+
+def test_content_recognizes_rank_and_personal_number() -> None:
+    samples = {
+        'Кому_присвоено': ['майор', 'капитан', 'полковник'],
+        'Идентификатор': ['1234567', '7654321', 'АА-099887'],
+    }
+    rec = recognize(list(samples), {}, samples)
+    assert rec.roles['rank'] == 'Кому_присвоено'
+    assert rec.roles['personal_number'] == 'Идентификатор'
+
+
+def test_alias_beats_content_guess() -> None:
+    # Содержимое — фамилии, но alias жёстко назначает position.
+    samples = {'Колонка': ['Иванов', 'Петров', 'Сидоров']}
+    rec = recognize(['Колонка'], {'Колонка': 'position'}, samples)
+    assert rec.roles == {'position': 'Колонка'}
+
+
+def test_content_overrides_header_only_when_unanimous() -> None:
+    # Заголовок «Имя», но ВСЕ ячейки — явные должности, имя не подтверждено
+    # ни в одной → жёсткий порог срабатывает, контент перебивает.
+    samples = {'Имя': ['директор', 'бухгалтер', 'инженер', 'слесарь']}
+    rec = recognize(['Имя'], {}, samples)
+    assert rec.roles == {'position': 'Имя'}
+
+
+def test_header_wins_when_content_confirms_it() -> None:
+    # Заголовок «Имя», содержимое — имена → заголовок остаётся.
+    samples = {'Имя': ['Пётр', 'Анна', 'Олег']}
+    rec = recognize(['Имя'], {}, samples)
+    assert rec.roles == {'name': 'Имя'}
+
+
+def test_header_wins_when_content_not_unanimous() -> None:
+    # Заголовок «Имя», содержимое смешанное (имя подтверждено в части ячеек)
+    # → жёсткий порог НЕ срабатывает, заголовок главнее.
+    samples = {'Имя': ['Пётр', 'директор', 'инженер']}
+    rec = recognize(['Имя'], {}, samples)
+    assert rec.roles == {'name': 'Имя'}
+
+
+def test_ambiguous_content_best_guess_with_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Незнакомый заголовок, образцы расходятся (нет ≥60% согласия) →
+    # лучшая догадка + предупреждение.
+    samples = {'Поле': ['Иванов', 'директор']}
+    with caplog.at_level(logging.WARNING):
+        rec = recognize(['Поле'], {}, samples)
+    # Ровно одна роль-догадка (не пусто) из допустимого набора.
+    assert len(rec.roles) == 1
+    assert set(rec.roles) <= {'surname', 'position'}
+    assert any('неуверенно' in r.message for r in caplog.records)
+
+
+def test_no_samples_behaves_as_header_only() -> None:
+    # Без образцов (или пустой samples) — поведение T006, pymorphy не зовётся.
+    rec = recognize(['Фамилия', 'Прочее'], {}, {})
+    assert rec.roles == {'surname': 'Фамилия'}

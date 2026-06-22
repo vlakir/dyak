@@ -4,7 +4,8 @@
 T002: ФИО через `petrovich` (`PetrovichInflector`, `Fio`, `NamePart`,
 `Initials`) + автоопределение пола (`detect_gender`). T003: должности через
 `pymorphy3` (`PymorphyInflector`, `Position`) — за тем же портом
-`Declinable`, общий `MorphAnalyzer` из `morph.py`.
+`Declinable`, общий `MorphAnalyzer` из `morph.py`. T016 фаза B: звания
+(`RankInflector`, `Rank`) — голова склоняется, генитивный хвост замирает.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from dyak.inflection.gender import (
 from dyak.inflection.petrovich_fio import PetrovichInflector
 from dyak.inflection.ports import Declinable
 from dyak.inflection.pymorphy_phrase import Position, PymorphyInflector
+from dyak.inflection.rank import Rank, RankInflector
 
 __all__ = [
     'Declinable',
@@ -31,6 +33,8 @@ __all__ = [
     'PetrovichInflector',
     'Position',
     'PymorphyInflector',
+    'Rank',
+    'RankInflector',
     'detect_gender',
     'parse_gender',
     'resolve_gender',

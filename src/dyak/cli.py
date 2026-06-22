@@ -17,7 +17,12 @@ import typer
 from dyak.check import check_table, format_report
 from dyak.config import Config, load_config
 from dyak.errors import DyakError, ReverseError
-from dyak.inflection import PetrovichInflector, PymorphyInflector, parse_gender
+from dyak.inflection import (
+    PetrovichInflector,
+    PymorphyInflector,
+    RankInflector,
+    parse_gender,
+)
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
 from dyak.pdf import export_to_pdf
@@ -77,6 +82,13 @@ def _position_overrides(cfg: Config) -> dict[str, CaseForms]:
     }
 
 
+def _rank_overrides(cfg: Config) -> dict[str, CaseForms]:
+    """Нормализовать `overrides.rank` в `ключ звания → падежные формы`."""
+    return {
+        normalize_lookup_key(text): forms for text, forms in cfg.overrides.rank.items()
+    }
+
+
 def generate_documents(
     table: Path,
     template: Path,
@@ -101,8 +113,10 @@ def generate_documents(
 
     inflector = PetrovichInflector()
     position_inflector = PymorphyInflector()
+    rank_inflector = RankInflector()
     gender_overrides = _gender_overrides(cfg)
     position_overrides = _position_overrides(cfg)
+    rank_overrides = _rank_overrides(cfg)
     used: set[str] = set()
     written: list[Path] = []
     with GenerateProgress(len(data.people), json_events=progress_json) as progress:
@@ -115,6 +129,8 @@ def generate_documents(
                 gender_overrides=gender_overrides,
                 position_inflector=position_inflector,
                 position_overrides=position_overrides,
+                rank_inflector=rank_inflector,
+                rank_overrides=rank_overrides,
             )
             base = (
                 f'Документ_{line}.docx'
@@ -251,6 +267,7 @@ def check(
             template,
             gender_overrides=_gender_overrides(cfg),
             position_overrides=_position_overrides(cfg),
+            rank_overrides=_rank_overrides(cfg),
         )
     except DyakError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)

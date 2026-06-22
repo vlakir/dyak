@@ -30,8 +30,22 @@ from dyak.inflection.morph import get_analyzer
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from pymorphy3 import MorphAnalyzer
+
 # Токенизация фразы с сохранением разделителей (пробелы и дефис).
 _TOKENS = re.compile(r'(\s+|-)')
+
+
+def inflect_word(word: str, case: Case, analyzer: MorphAnalyzer) -> str:
+    """
+    Просклонять одно слово к падежу `case`; неразобранное — как есть.
+
+    Общий примитив склонения слова: используется и пословным движком фраз
+    (`_decline_phrase`), и движком званий (`inflection/rank.py`).
+    """
+    parsed = analyzer.parse(word)[0]
+    inflected = parsed.inflect({case.value})
+    return inflected.word if inflected is not None else word
 
 
 @functools.lru_cache(maxsize=4096)
@@ -43,9 +57,7 @@ def _decline_phrase(text: str, case: Case) -> str:
         if not chunk or chunk.isspace() or chunk == '-':
             parts.append(chunk)
             continue
-        parsed = analyzer.parse(chunk)[0]
-        inflected = parsed.inflect({case.value})
-        parts.append(inflected.word if inflected is not None else chunk)
+        parts.append(inflect_word(chunk, case, analyzer))
     return ''.join(parts)
 
 
