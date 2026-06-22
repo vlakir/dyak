@@ -433,6 +433,47 @@ def test_surname_alone_tagged_with_fullname_column(
     assert '{{ Фамилия | рд }}' in _paragraph_text(document)
 
 
+# --- phase 3: round-trip verify -----------------------------------------------
+
+
+def test_roundtrip_clean_build_has_no_mismatch(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    # Корректно собранный шаблон воспроизводит образец — расхождений нет.
+    person = _person(Фамилия='Иванов', Имя='Пётр', Отчество='Семёнович')
+    sample = _sample_doc(
+        tmp_path / 'sample.docx', 'Вручить Иванову Петру Семёновичу уведомление.'
+    )
+    _document, report = _parts_template(sample, person, fio_inflector)
+    assert report.of_kind(FindingKind.ROUNDTRIP_MISMATCH) == []
+
+
+def test_roundtrip_detects_stray_template_syntax(tmp_path: Path) -> None:
+    # Образец с {% raw %}-шпаргалкой: forward-рендер срежет управляющие теги,
+    # текст разойдётся с оригиналом → roundtrip_mismatch (шаблон всё равно собран).
+    person = _person(Фамилия='Иванов')
+    sample = _sample_doc(
+        tmp_path / 'sample.docx',
+        'Памятка {% raw %}{{ Дата }}{% endraw %} для Иванов.',
+    )
+    document, report = build_template(sample, person)
+    assert '{{ Фамилия }}' in _paragraph_text(document)  # шаблон собран
+    mismatches = report.of_kind(FindingKind.ROUNDTRIP_MISMATCH)
+    assert mismatches
+    assert 'ожидалось' in mismatches[0].message
+
+
+def test_roundtrip_render_failure_recorded_not_raised(tmp_path: Path) -> None:
+    # Забытый неизвестный тег в образце: forward-рендер падает StrictUndefined,
+    # но reverse best-effort — фиксируем находкой, шаблон всё равно сохранён.
+    person = _person(Фамилия='Иванов')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Иванов, см. {{ Неизвестно }}.')
+    document, report = build_template(sample, person)
+    assert '{{ Фамилия }}' in _paragraph_text(document)
+    mismatches = report.of_kind(FindingKind.ROUNDTRIP_MISMATCH)
+    assert any('не выполнена' in f.message for f in mismatches)
+
+
 # --- CLI ----------------------------------------------------------------------
 
 
