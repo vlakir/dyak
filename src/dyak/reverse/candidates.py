@@ -72,12 +72,16 @@ class Candidate:
     `display` — именительная/исходная форма для сообщений; `forms` — искомые
     формы с тегами; `primary` — ждём ли значение в документе (если да и не
     нашлось → `not_found`; вторичные fallback-кандидаты молчат при отсутствии).
+    `name_part` — кандидат относится к имени субъекта (фамилия/имя/отчество/
+    целое ФИО/инициалы): по сумме их совпадений T018 предупреждает о возможной
+    подписи/исполнителе.
     """
 
     key: str
     display: str
     forms: tuple[SearchForm, ...]
     primary: bool = True
+    name_part: bool = False
 
 
 def _tag(key: str) -> str:
@@ -116,7 +120,13 @@ def _fio_candidates(
         forms = _decline_forms(fio, fullname_source)
         if forms:
             candidates.append(
-                Candidate(fullname_source, fio.inflect(Case.NOMN), forms, primary=True)
+                Candidate(
+                    fullname_source,
+                    fio.inflect(Case.NOMN),
+                    forms,
+                    primary=True,
+                    name_part=True,
+                )
             )
             consumed.add(fullname_source)
     for attr in _INITIALS_ATTRS:
@@ -129,6 +139,7 @@ def _fio_candidates(
                     initials.inflect(Case.NOMN),
                     forms,
                     primary=False,
+                    name_part=True,
                 )
             )
     return candidates
@@ -152,7 +163,15 @@ def _declinable_candidates(
             # производная из колонки «ФИО» (канонический ключ, нет в `cells`) —
             # вторичный fallback, чтобы не шуметь `not_found` поверх целого ФИО.
             primary = key in person.cells
-            candidates.append(Candidate(key, value.text, forms, primary=primary))
+            candidates.append(
+                Candidate(
+                    key,
+                    value.text,
+                    forms,
+                    primary=primary,
+                    name_part=isinstance(value, NamePart),
+                )
+            )
             if key in person.cells:
                 consumed.add(key)
     fio = context.get(KEY_FULLNAME)
