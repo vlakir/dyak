@@ -10,7 +10,13 @@ T002: ФИО через `petrovich` (`PetrovichInflector`, `Fio`, `NamePart`,
 from __future__ import annotations
 
 from dyak.inflection.fio import Fio, Initials, NamePart
-from dyak.inflection.gender import detect_gender, parse_gender
+from dyak.inflection.gender import (
+    GenderResolution,
+    GenderSource,
+    detect_gender,
+    parse_gender,
+    resolve_gender,
+)
 from dyak.inflection.petrovich_fio import PetrovichInflector
 from dyak.inflection.ports import Declinable
 from dyak.inflection.pymorphy_phrase import Position, PymorphyInflector
@@ -18,6 +24,8 @@ from dyak.inflection.pymorphy_phrase import Position, PymorphyInflector
 __all__ = [
     'Declinable',
     'Fio',
+    'GenderResolution',
+    'GenderSource',
     'Initials',
     'NamePart',
     'PetrovichInflector',
@@ -25,4 +33,5 @@ __all__ = [
     'PymorphyInflector',
     'detect_gender',
     'parse_gender',
+    'resolve_gender',
 ]

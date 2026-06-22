@@ -23,11 +23,36 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from enum import StrEnum
 
 from dyak.domain import Gender
 from dyak.inflection.morph import get_analyzer
 
 logger = logging.getLogger(__name__)
+
+
+class GenderSource(StrEnum):
+    """Откуда взят пол — для отчёта `check` (T004)."""
+
+    OVERRIDE = 'override'  # ручное указание в `genders`
+    PATRONYMIC = 'patronymic'  # по окончанию отчества
+    NAME = 'name'  # по имени (pymorphy)
+    DEFAULT = 'default'  # не определён, взят мужской по умолчанию
+
+
+@dataclass(frozen=True, slots=True)
+class GenderResolution:
+    """Результат определения пола: значение + источник (уверенность)."""
+
+    gender: Gender
+    source: GenderSource
+
+    @property
+    def is_confident(self) -> bool:
+        """Уверенно ли определён пол (не дефолт-заглушка)."""
+        return self.source is not GenderSource.DEFAULT
+
 
 # Окончания отчеств (нормализованные, нижний регистр).
 _MALE_PATRONYMIC = ('ич', 'ыч')  # Семёнович, Кузьмич, Лукич, Фомич
@@ -71,25 +96,37 @@ def _by_name(name: str) -> Gender | None:
     return None
 
 
+def resolve_gender(
+    name: str,
+    patronymic: str,
+    *,
+    override: Gender | None = None,
+) -> GenderResolution:
+    """Определить пол с источником: override → отчество → имя → дефолт."""
+    if override is not None:
+        return GenderResolution(override, GenderSource.OVERRIDE)
+    by_patronymic = _by_patronymic(patronymic)
+    if by_patronymic is not None:
+        return GenderResolution(by_patronymic, GenderSource.PATRONYMIC)
+    by_name = _by_name(name)
+    if by_name is not None:
+        return GenderResolution(by_name, GenderSource.NAME)
+    return GenderResolution(Gender.MALE, GenderSource.DEFAULT)
+
+
 def detect_gender(
     name: str,
     patronymic: str,
     *,
     override: Gender | None = None,
 ) -> Gender:
-    """Определить пол: отчество → имя → override → дефолт «мужской»."""
-    if override is not None:
-        return override
-    by_patronymic = _by_patronymic(patronymic)
-    if by_patronymic is not None:
-        return by_patronymic
-    by_name = _by_name(name)
-    if by_name is not None:
-        return by_name
-    logger.warning(
-        'Не удалось определить пол для «%s %s» — беру мужской по умолчанию; '
-        'уточните в секции `genders` конфига при необходимости',
-        name,
-        patronymic,
-    )
-    return Gender.MALE
+    """Пол для горячего пути (с предупреждением при дефолте)."""
+    resolution = resolve_gender(name, patronymic, override=override)
+    if resolution.source is GenderSource.DEFAULT:
+        logger.warning(
+            'Не удалось определить пол для «%s %s» — беру мужской по умолчанию; '
+            'уточните в секции `genders` конфига при необходимости',
+            name,
+            patronymic,
+        )
+    return resolution.gender

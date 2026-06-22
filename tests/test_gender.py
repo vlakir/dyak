@@ -7,7 +7,7 @@ import logging
 import pytest
 
 from dyak.domain import Gender
-from dyak.inflection import detect_gender, parse_gender
+from dyak.inflection import GenderSource, detect_gender, parse_gender, resolve_gender
 
 
 @pytest.mark.parametrize(
@@ -70,3 +70,17 @@ def test_patronymic_wins_over_name() -> None:
 )
 def test_parse_gender(text: str, expected: Gender | None) -> None:
     assert parse_gender(text) == expected
+
+
+def test_resolve_gender_sources() -> None:
+    assert resolve_gender('Анна', 'Сергеевна').source is GenderSource.PATRONYMIC
+    assert resolve_gender('Анна', '').source is GenderSource.NAME
+    assert resolve_gender('Саша', '').source is GenderSource.DEFAULT
+    res = resolve_gender('Саша', 'Семёнович', override=Gender.FEMALE)
+    assert res.source is GenderSource.OVERRIDE
+    assert res.gender is Gender.FEMALE
+
+
+def test_gender_resolution_is_confident() -> None:
+    assert resolve_gender('Анна', 'Сергеевна').is_confident is True
+    assert resolve_gender('Саша', '').is_confident is False

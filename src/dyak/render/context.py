@@ -27,12 +27,16 @@ from dyak.columns import (
     SURNAME,
     split_fullname,
 )
-from dyak.inflection import Fio, NamePart, Position, detect_gender
+from dyak.inflection import Fio, NamePart, Position, detect_gender, resolve_gender
 
 if TYPE_CHECKING:
     from dyak.config import CaseForms
     from dyak.domain import Gender, Person
-    from dyak.inflection import PetrovichInflector, PymorphyInflector
+    from dyak.inflection import (
+        GenderResolution,
+        PetrovichInflector,
+        PymorphyInflector,
+    )
 
 # Канонический ключ целого ФИО в контексте (`{{ ФИО | вн }}`).
 KEY_FULLNAME = 'ФИО'
@@ -52,6 +56,19 @@ def _fullname_key(surname: str, name: str, patronymic: str) -> str:
     """Нормализованный ключ ФИО для поиска ручного пола в `gender_overrides`."""
     joined = ' '.join(part for part in (surname, name, patronymic) if part)
     return normalize_lookup_key(joined)
+
+
+def resolve_row_gender(
+    person: Person,
+    *,
+    roles: dict[str, str],
+    fullname_source: str | None,
+    gender_overrides: dict[str, Gender],
+) -> GenderResolution:
+    """Определить пол строки с источником (для отчёта `check`)."""
+    surname_t, name_t, patronymic_t = _part_texts(person, roles, fullname_source)
+    override = gender_overrides.get(_fullname_key(surname_t, name_t, patronymic_t))
+    return resolve_gender(name_t, patronymic_t, override=override)
 
 
 def _part_texts(

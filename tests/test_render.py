@@ -9,6 +9,7 @@ import pytest
 from docx import Document
 
 from dyak.domain import Person
+from dyak.errors import TemplateError
 from dyak.render.context import build_context
 from dyak.render.engine import (
     default_filename_template,
@@ -166,3 +167,19 @@ def test_render_document_fixes_run_split_tag_with_space(
     text = '\n'.join(p.text for p in Document(out).paragraphs)
     assert '01.07.2026' in text
     assert any('Дата начала' in r.message for r in caplog.records)
+
+
+def test_render_document_raises_on_undefined_variable(tmp_path: Path) -> None:
+    template = tmp_path / 'tpl.docx'
+    doc = Document()
+    doc.add_paragraph('{{ НетТакого }}')
+    doc.save(template)
+    out = tmp_path / 'out.docx'
+    with pytest.raises(TemplateError, match='НетТакого'):
+        render_document(template, {'Фамилия': 'Иванов'}, out)
+    assert not out.exists()
+
+
+def test_render_filename_raises_on_undefined_variable() -> None:
+    with pytest.raises(TemplateError, match='НетТакого'):
+        render_filename('{{ НетТакого }}.docx', {'Фамилия': 'Иванов'})

@@ -75,6 +75,11 @@ class Fio:
     def __str__(self) -> str:
         return self.inflect(Case.NOMN)
 
+    @property
+    def gender(self) -> Gender:
+        """Пол ФИО (общий для всех частей) — нужен фильтру согласования `согл`."""
+        return self.surname.gender
+
     def __getattr__(self, name: str) -> Initials:
         """
         Доступ к инициалам по русским именам из шаблона (`{{ ФИО.инициалы }}`).
