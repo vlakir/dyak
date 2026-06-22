@@ -17,6 +17,13 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install Qt system libraries (PySide6 GUI-тесты, offscreen)
+        # Импорт PySide6.QtWidgets дёргает libEGL/libGL даже под
+        # QT_QPA_PLATFORM=offscreen; на голом раннере их нет (T008).
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3
       - name: Install dependencies
         run: uv sync
       - name: Ruff lint
