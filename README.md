@@ -23,6 +23,9 @@
 ```bash
 uv sync                       # поставить зависимости
 
+# старт с нуля: выложить пример конфига, шаблона и таблицы
+PYTHONPATH=src uv run python -m dyak init --dir ./my_project
+
 # генерация документов (подстановка по заголовкам колонок, без склонения)
 PYTHONPATH=src uv run python -m dyak generate \
   --table employees.xlsx \
