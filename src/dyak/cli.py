@@ -1,7 +1,8 @@
 """
-CLI dyak (typer). T006: команда `generate` — подстановка по заголовкам колонок.
+CLI dyak (typer): команды `generate`, `check` (T004) и `init` (T005).
 
-Команды `check` и `init` появляются в T004/T005.
+`generate` (T006) — подстановка по заголовкам колонок; `check` — сухой
+прогон с отчётом; `init` — выложить стартовый scaffold-набор.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from dyak.render.engine import (
     render_document,
     render_filename,
 )
+from dyak.scaffolding import init_project
 
 if TYPE_CHECKING:
     from dyak.config import CaseForms
@@ -197,6 +199,38 @@ def check(
     typer.echo(format_report(report))
     if report.fatal:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def init(
+    directory: Annotated[
+        Path | None,
+        typer.Option(
+            '--dir',
+            help='Каталог для scaffold-набора (по умолчанию текущий)',
+        ),
+    ] = None,
+    *,
+    force: Annotated[
+        bool,
+        typer.Option('--force', help='Перезаписать существующие файлы'),
+    ] = False,
+) -> None:
+    """Выложить стартовый набор: dyak.yaml + пример шаблона + пример таблицы."""
+    target = directory if directory is not None else Path.cwd()
+    try:
+        created = init_project(target, force=force)
+    except DyakError as exc:
+        typer.echo(f'Ошибка: {exc}', err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo('Создан стартовый набор dyak:')
+    for path in created:
+        typer.echo(f'  {path}')
+    typer.echo(
+        '\nДальше: отредактируйте table.xlsx и template.docx под себя '
+        '(в шаблоне удалите блок «ШПАРГАЛКА»), затем\n'
+        '  dyak generate --table table.xlsx --template template.docx --out out',
+    )
 
 
 if __name__ == '__main__':
