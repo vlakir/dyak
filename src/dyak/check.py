@@ -31,6 +31,8 @@ from dyak.inflection import (
     PetrovichInflector,
     Position,
     PymorphyInflector,
+    Rank,
+    RankInflector,
 )
 from dyak.render.context import KEY_FULLNAME, build_context, resolve_row_gender
 from dyak.render.engine import render_to_document
@@ -83,21 +85,24 @@ class CheckReport:
         return any(issue.kind in fatal_kinds for issue in self.issues)
 
 
-def _declines(value: NamePart | Position) -> bool:
+def _declines(value: NamePart | Position | Rank) -> bool:
     """Меняется ли значение хоть в одном косвенном падеже."""
     base = value.text
     return any(value.inflect(case) != base for case in _OBLIQUE)
 
 
+_NOT_DECLINED_KIND = {Position: 'должность', Rank: 'звание'}
+
+
 def _check_declension(row: int, context: dict[str, object]) -> list[Issue]:
-    """Найти склоняемые «листья» (части ФИО, должность), которые не склоняются."""
+    """Найти склоняемые «листья» (ФИО/должность/звание), которые не склоняются."""
     issues: list[Issue] = []
     for value in context.values():
-        if not isinstance(value, (NamePart, Position)):
+        if not isinstance(value, (NamePart, Position, Rank)):
             continue
         if not value.text or _declines(value):
             continue
-        kind = 'должность' if isinstance(value, Position) else 'часть ФИО'
+        kind = _NOT_DECLINED_KIND.get(type(value), 'часть ФИО')
         message = (
             f'не склоняется ({kind}): «{value.text}» — добавьте override, '
             f'если это не иностранное/несклоняемое слово'
@@ -148,10 +153,12 @@ def check_table(
     *,
     gender_overrides: dict[str, Gender],
     position_overrides: dict[str, CaseForms],
+    rank_overrides: dict[str, CaseForms],
 ) -> CheckReport:
     """Сухой прогон: рендер каждой строки в память + сбор отчёта."""
     inflector = PetrovichInflector()
     position_inflector = PymorphyInflector()
+    rank_inflector = RankInflector()
     issues: list[Issue] = []
     for row, person in enumerate(table.people, start=1):
         issues.extend(_check_gender(row, person, table, gender_overrides))
@@ -163,6 +170,8 @@ def check_table(
             gender_overrides=gender_overrides,
             position_inflector=position_inflector,
             position_overrides=position_overrides,
+            rank_inflector=rank_inflector,
+            rank_overrides=rank_overrides,
         )
         try:
             render_to_document(template_path, context)

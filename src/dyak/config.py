@@ -23,21 +23,26 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Роль склоняемой колонки (совпадает с константами в columns.py).
-# `fullname` — одна колонка «ФИО», разбираемая на фамилию/имя/отчество.
-Role = Literal['surname', 'name', 'patronymic', 'position', 'fullname']
+# Роль склоняемой/служебной колонки (совпадает с константами в columns.py).
+# `fullname` — одна колонка «ФИО», разбираемая на фамилию/имя/отчество;
+# `rank` — звание (склоняемое, движок — фаза B T016); `personal_number` —
+# личный номер (несклоняемый, подставляется буквально).
+Role = Literal[
+    'surname', 'name', 'patronymic', 'position', 'fullname', 'rank', 'personal_number'
+]
 
 # Падежные формы одного слова: русское сокращение падежа → форма.
 CaseForms = dict[str, str]
 
 
 class Overrides(BaseModel):
-    """Ручные формы склонения (§7.3). Задел на T002–T003."""
+    """Ручные формы склонения (§7.3). `rank` — звания (T016 фаза B)."""
 
     model_config = ConfigDict(extra='forbid')
 
     fio: dict[str, CaseForms] = Field(default_factory=dict)
     position: dict[str, CaseForms] = Field(default_factory=dict)
+    rank: dict[str, CaseForms] = Field(default_factory=dict)
 
 
 class Config(BaseModel):

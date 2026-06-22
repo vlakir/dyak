@@ -27,6 +27,11 @@ if TYPE_CHECKING:
 
     from dyak.config import Config
 
+# Сколько непустых ячеек колонки брать как образцы для контентного
+# распознавания роли (T016). Достаточно небольшой выборки — таблицы
+# однородны по колонке.
+_SAMPLE_LIMIT = 5
+
 
 def _to_str(value: object) -> str:
     """Привести значение ячейки к строке без переформатирования."""
@@ -90,8 +95,10 @@ def _read_rows(ws: Worksheet, config: Config) -> Table:
         raise TableError(msg)
 
     columns = _build_columns(header_row)
-    recognition = recognize([key for _, key in columns], config.aliases)
 
+    # Образцы ячеек для контентного распознавания ролей (T016): первые
+    # `_SAMPLE_LIMIT` непустых значений каждой колонки.
+    samples: dict[str, list[str]] = {key: [] for _, key in columns}
     people: list[Person] = []
     for row in rows:
         cells = {
@@ -100,6 +107,12 @@ def _read_rows(ws: Worksheet, config: Config) -> Table:
         if all(value == '' for value in cells.values()):
             continue  # пропускаем полностью пустые строки (хвост листа)
         people.append(Person(cells=cells))
+        for _, key in columns:
+            bucket = samples[key]
+            if cells[key] and len(bucket) < _SAMPLE_LIMIT:
+                bucket.append(cells[key])
+
+    recognition = recognize([key for _, key in columns], config.aliases, samples)
     return Table(
         roles=recognition.roles,
         fullname_source=recognition.fullname_source,

@@ -24,10 +24,18 @@ from dyak.columns import (
     NAME,
     PATRONYMIC,
     POSITION,
+    RANK,
     SURNAME,
     split_fullname,
 )
-from dyak.inflection import Fio, NamePart, Position, detect_gender, resolve_gender
+from dyak.inflection import (
+    Fio,
+    NamePart,
+    Position,
+    Rank,
+    detect_gender,
+    resolve_gender,
+)
 
 if TYPE_CHECKING:
     from dyak.config import CaseForms
@@ -36,6 +44,7 @@ if TYPE_CHECKING:
         GenderResolution,
         PetrovichInflector,
         PymorphyInflector,
+        RankInflector,
     )
 
 # Канонический ключ целого ФИО в контексте (`{{ ФИО | вн }}`).
@@ -139,6 +148,24 @@ def _add_position(
     context[key] = Position(text, inflector, forms)
 
 
+def _add_rank(
+    context: dict[str, object],
+    person: Person,
+    roles: dict[str, str],
+    inflector: RankInflector,
+    rank_overrides: dict[str, CaseForms],
+) -> None:
+    """Положить склоняемое звание (`Rank`) под его колонку (если есть)."""
+    key = roles.get(RANK)
+    if key is None:
+        return
+    text = person.cells.get(key, '')
+    if not text:
+        return
+    forms = rank_overrides.get(normalize_lookup_key(text), {})
+    context[key] = Rank(text, inflector, forms)
+
+
 def build_context(
     person: Person,
     *,
@@ -148,8 +175,10 @@ def build_context(
     gender_overrides: dict[str, Gender] | None = None,
     position_inflector: PymorphyInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
+    rank_inflector: RankInflector | None = None,
+    rank_overrides: dict[str, CaseForms] | None = None,
 ) -> dict[str, object]:
-    """Построить контекст; при наличии движков — со склоняемыми ФИО/должностью."""
+    """Построить контекст; с движками — склоняемые ФИО/должность/звание."""
     context: dict[str, object] = dict(person.cells)
     roles = roles or {}
 
@@ -171,4 +200,6 @@ def build_context(
         _add_position(
             context, person, roles, position_inflector, position_overrides or {}
         )
+    if rank_inflector is not None:
+        _add_rank(context, person, roles, rank_inflector, rank_overrides or {})
     return context

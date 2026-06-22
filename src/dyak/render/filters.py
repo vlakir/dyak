@@ -32,6 +32,20 @@ if TYPE_CHECKING:
 
     from dyak.domain import Case
 
+# Служебный маркер пустой подстановки (T016 фаза C): `finalize` подменяет им
+# любой пустой результат `{{ … }}`, чтобы пост-обработка рендера знала, где
+# было пустое значение, и убрала лишний пробел/висячую пунктуацию. Символ из
+# Private Use Area — в реальных кадровых текстах не встречается. Маркер всегда
+# снимается до сохранения/сверки документа (`render/engine.py`, `render_filename`).
+EMPTY_MARKER = ''
+
+
+def _finalize(value: object) -> object:
+    """Пометить пустую подстановку маркером (empty-aware чистка, T016 фаза C)."""
+    if value is None or str(value) == '':
+        return EMPTY_MARKER
+    return value
+
 
 def make_case_filter(case: Case) -> Callable[[object], object]:
     """Фильтр падежа: склоняет `Declinable`, прочее отдаёт как есть."""
@@ -59,7 +73,11 @@ def agree_by_gender(value: object, male: str, female: str) -> str:
 
 def build_jinja_env() -> jinja2.Environment:
     """Окружение Jinja: русские фильтры + строгий режим неизвестных переменных."""
-    env = jinja2.Environment(autoescape=True, undefined=jinja2.StrictUndefined)
+    env = jinja2.Environment(
+        autoescape=True,
+        undefined=jinja2.StrictUndefined,
+        finalize=_finalize,
+    )
     for rus, case in RUS_CASE.items():
         env.filters[rus] = make_case_filter(case)
     env.filters['согл'] = agree_by_gender
