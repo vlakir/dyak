@@ -61,7 +61,13 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
      разработчика, иначе теряется фокус (классическое WIP-limit
      правило из Kanban). -->
 
-<!-- Пусто. -->
+- **T007** — Reverse-генерация шаблона из готового документа: команда
+  `dyak reverse --doc … --table … --row N --out …` — сопоставляет образец-docx
+  со строкой таблицы и выдаёт шаблон с jinja-тегами + падежными фильтрами
+  (decline-and-match), отчёт о находках, подсветка спорных мест, round-trip
+  verify. Без новых тяжёлых зависимостей (slovnet→T015, LLM→T014).
+  (`specs/T007-reverse-template/spec.md`, ветка `T007-reverse-template`).
+  Acceptance — см. spec §4.
 
 ## Done
 

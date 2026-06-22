@@ -25,3 +25,7 @@ class UndefinedVariableError(TemplateError):
 
 class PdfExportError(DyakError):
     """Ошибка экспорта в PDF (LibreOffice не найден или конвертация упала)."""
+
+
+class ReverseError(DyakError):
+    """Ошибка обратной генерации шаблона (`dyak reverse`): образец не читается."""
