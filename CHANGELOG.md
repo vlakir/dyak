@@ -28,6 +28,12 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 <!-- Что накопилось с момента последнего релиза/значимой точки. -->
 
 ### Added
+- PDF-экспорт (T012): флаг `generate --pdf` конвертирует готовые docx в
+  PDF через LibreOffice headless (`soffice --convert-to pdf`, один
+  батч-вызов рядом с docx). Кросс-платформенный поиск `soffice`
+  (PATH + типичные пути Linux/macOS/Windows); LibreOffice не найден →
+  понятная ошибка и код 1, без трейсбека. Прямой вызов `soffice` (не
+  `docx2pdf`, тот требует MS Word). ADR 2026-06-22.
 - Прогресс `generate` (T013): живой `rich`-бар в интерактивном терминале
   (`N/Total`); в pipe/файл бар не печатается. Флаг `--progress-json`
   эмитит построчный JSONL в stderr (события `start`/`progress`/`done`/

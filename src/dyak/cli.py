@@ -19,6 +19,7 @@ from dyak.errors import DyakError
 from dyak.inflection import PetrovichInflector, PymorphyInflector, parse_gender
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
+from dyak.pdf import export_to_pdf
 from dyak.progress import GenerateProgress
 from dyak.render.context import build_context, normalize_lookup_key
 from dyak.render.engine import (
@@ -160,6 +161,13 @@ def generate(
             help='Машиночитаемый прогресс (JSONL-события) в stderr — для GUI',
         ),
     ] = False,
+    pdf: Annotated[
+        bool,
+        typer.Option(
+            '--pdf',
+            help='Дополнительно сконвертировать вывод в PDF (нужен LibreOffice)',
+        ),
+    ] = False,
 ) -> None:
     """Сгенерировать набор документов из таблицы и шаблона."""
     try:
@@ -172,10 +180,12 @@ def generate(
             filename,
             progress_json=progress_json,
         )
+        pdfs = export_to_pdf(written, out) if pdf else []
     except DyakError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f'Готово: {len(written)} документ(ов) в {out}')
+    suffix = f' (+ {len(pdfs)} PDF)' if pdf else ''
+    typer.echo(f'Готово: {len(written)} документ(ов){suffix} в {out}')
 
 
 @app.command()

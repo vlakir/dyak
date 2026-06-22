@@ -21,3 +21,7 @@ class TemplateError(DyakError):
 
 class UndefinedVariableError(TemplateError):
     """Шаблон ссылается на неизвестную переменную (`StrictUndefined`)."""
+
+
+class PdfExportError(DyakError):
+    """Ошибка экспорта в PDF (LibreOffice не найден или конвертация упала)."""
