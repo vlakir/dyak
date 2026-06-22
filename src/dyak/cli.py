@@ -171,6 +171,8 @@ def reverse_template(
         gender_overrides=_gender_overrides(cfg),
         position_inflector=PymorphyInflector(),
         position_overrides=_position_overrides(cfg),
+        rank_inflector=RankInflector(),
+        rank_overrides=_rank_overrides(cfg),
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     document.save(str(out))

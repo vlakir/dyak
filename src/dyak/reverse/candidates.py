@@ -27,13 +27,18 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from dyak.domain import CASE_RUS, Case
-from dyak.inflection import Fio, NamePart, Position
+from dyak.inflection import Fio, NamePart, Position, Rank
 from dyak.render.context import KEY_FULLNAME, build_context
 
 if TYPE_CHECKING:
     from dyak.config import CaseForms
     from dyak.domain import Gender, Person
-    from dyak.inflection import Declinable, PetrovichInflector, PymorphyInflector
+    from dyak.inflection import (
+        Declinable,
+        PetrovichInflector,
+        PymorphyInflector,
+        RankInflector,
+    )
 
 # Падежи в каноническом порядке (именительный первым): при омонимии форм
 # выигрывает падеж раньше по списку, поэтому совпавшая основа без склонения
@@ -138,11 +143,12 @@ def _declinable_candidates(
     """Склоняемые кандидаты из контекста (части ФИО, должность, ФИО, инициалы)."""
     candidates: list[Candidate] = []
     for key, value in context.items():
-        if isinstance(value, NamePart | Position):
+        if isinstance(value, NamePart | Position | Rank):
             forms = _decline_forms(value, key)
             if not forms:
                 continue
-            # Часть ФИО под её реальной колонкой (есть в `cells`) — первичная;
+            # Часть ФИО / должность / звание под её реальной колонкой (есть в
+            # `cells`) — первичная;
             # производная из колонки «ФИО» (канонический ключ, нет в `cells`) —
             # вторичный fallback, чтобы не шуметь `not_found` поверх целого ФИО.
             primary = key in person.cells
@@ -164,18 +170,25 @@ def build_candidates(
     gender_overrides: dict[str, Gender] | None = None,
     position_inflector: PymorphyInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
+    rank_inflector: RankInflector | None = None,
+    rank_overrides: dict[str, CaseForms] | None = None,
 ) -> list[Candidate]:
     """
     Собрать кандидатов на замену из строки данных.
 
-    С движками склонения (`inflector`/`position_inflector`) добавляются
-    склоняемые кандидаты (фаза 2); без них — только плоские ячейки (фаза 1).
-    Плоские ячейки, уже покрытые склонением, пропускаются (`consumed`).
+    С движками склонения (`inflector`/`position_inflector`/`rank_inflector`)
+    добавляются склоняемые кандидаты (фаза 2); без них — только плоские ячейки
+    (фаза 1). Плоские ячейки, уже покрытые склонением, пропускаются
+    (`consumed`).
     """
     candidates: list[Candidate] = []
     consumed: set[str] = set()
 
-    if inflector is not None or position_inflector is not None:
+    if (
+        inflector is not None
+        or position_inflector is not None
+        or rank_inflector is not None
+    ):
         context = build_context(
             person,
             fullname_source=fullname_source,
@@ -184,6 +197,8 @@ def build_candidates(
             gender_overrides=gender_overrides,
             position_inflector=position_inflector,
             position_overrides=position_overrides,
+            rank_inflector=rank_inflector,
+            rank_overrides=rank_overrides,
         )
         candidates.extend(
             _declinable_candidates(context, person, fullname_source, consumed)
