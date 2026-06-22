@@ -239,3 +239,28 @@ def test_filename_strips_empty_marker(tmp_path: Path) -> None:
     )
     assert EMPTY_MARKER not in name
     assert name == 'Приказ_.docx'
+
+
+def test_filename_keeps_html_special_chars_literal() -> None:
+    # T011: общий с телом env держит autoescape=True, но в имени файла
+    # `&`/`'` должны остаться буквальными, а не уехать в `&amp;`/`&#39;`.
+    name = render_filename(
+        'Приказ_{{ Орг }}.docx', build_context(Person(cells={'Орг': "Рога & Ко 'A'"}))
+    )
+    assert name == "Приказ_Рога & Ко 'A'.docx"
+
+
+def test_body_keeps_html_escaping_for_special_chars(tmp_path: Path) -> None:
+    # T011-страховка: фикс имени файла не должен ослабить экранирование тела.
+    # Значение с `&` обязано сохраниться как валидный XML (`&amp;`), иначе docx
+    # испортится; python-docx читает его обратно как `&`.
+    template = tmp_path / 'tpl.docx'
+    doc = Document()
+    doc.add_paragraph('Организация: {{ Орг }}')
+    doc.save(template)
+
+    out = tmp_path / 'out.docx'
+    render_document(template, build_context(Person(cells={'Орг': 'Рога & Ко'})), out)
+
+    text = '\n'.join(p.text for p in Document(out).paragraphs)
+    assert 'Организация: Рога & Ко' in text

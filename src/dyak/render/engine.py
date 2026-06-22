@@ -15,6 +15,7 @@ T006: подстановка идёт по заголовкам колонок. 
 
 from __future__ import annotations
 
+import html
 import logging
 import re
 from typing import TYPE_CHECKING
@@ -98,6 +99,12 @@ def render_filename(template: str, context: dict[str, object]) -> str:
     except jinja2.UndefinedError as exc:
         msg = f'Неизвестная переменная в шаблоне имени файла: {exc}'
         raise UndefinedVariableError(msg) from exc
+    # Общий с телом docx env держит `autoescape=True` (обязателен для XML тела),
+    # поэтому `&`/`'`/`<`/`>`/`"` в значении уезжают в `&amp;`/`&#39;`/… Для имени
+    # файла HTML-экранирование не нужно — снимаем его обратным `html.unescape`
+    # (точный инверс autoescape). Тело docx это не затрагивает: у него свой путь
+    # рендера, экранирование там остаётся (T011).
+    rendered = html.unescape(rendered)
     # Маркер пустой подстановки не должен попасть в имя файла.
     return rendered.replace(EMPTY_MARKER, '')
 
