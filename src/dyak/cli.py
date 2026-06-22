@@ -19,6 +19,7 @@ from dyak.errors import DyakError
 from dyak.inflection import PetrovichInflector, PymorphyInflector, parse_gender
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
+from dyak.progress import GenerateProgress
 from dyak.render.context import build_context, normalize_lookup_key
 from dyak.render.engine import (
     default_filename_template,
@@ -78,6 +79,8 @@ def generate_documents(
     config: Path | None,
     sheet: str | None,
     filename: str | None,
+    *,
+    progress_json: bool = False,
 ) -> list[Path]:
     """Сгенерировать по документу на строку таблицы. Вернуть пути файлов."""
     cfg = load_config(config)
@@ -97,25 +100,27 @@ def generate_documents(
     position_overrides = _position_overrides(cfg)
     used: set[str] = set()
     written: list[Path] = []
-    for line, person in enumerate(data.people, start=1):
-        context = build_context(
-            person,
-            fullname_source=data.fullname_source,
-            roles=data.roles,
-            inflector=inflector,
-            gender_overrides=gender_overrides,
-            position_inflector=position_inflector,
-            position_overrides=position_overrides,
-        )
-        base = (
-            f'Документ_{line}.docx'
-            if name_template is None
-            else render_filename(name_template, context)
-        )
-        name = unique_filename(base, used)
-        target = out / name
-        render_document(template, context, target)
-        written.append(target)
+    with GenerateProgress(len(data.people), json_events=progress_json) as progress:
+        for line, person in enumerate(data.people, start=1):
+            context = build_context(
+                person,
+                fullname_source=data.fullname_source,
+                roles=data.roles,
+                inflector=inflector,
+                gender_overrides=gender_overrides,
+                position_inflector=position_inflector,
+                position_overrides=position_overrides,
+            )
+            base = (
+                f'Документ_{line}.docx'
+                if name_template is None
+                else render_filename(name_template, context)
+            )
+            name = unique_filename(base, used)
+            target = out / name
+            render_document(template, context, target)
+            written.append(target)
+            progress.advance(name)
 
     logger.info('Сгенерировано документов: %d → %s', len(written), out)
     return written
@@ -147,6 +152,14 @@ def generate(
             'напр. "Приказ_{{ Номер_приказа }}_{{ Фамилия }}.docx"',
         ),
     ] = None,
+    *,
+    progress_json: Annotated[
+        bool,
+        typer.Option(
+            '--progress-json',
+            help='Машиночитаемый прогресс (JSONL-события) в stderr — для GUI',
+        ),
+    ] = False,
 ) -> None:
     """Сгенерировать набор документов из таблицы и шаблона."""
     try:
@@ -157,6 +170,7 @@ def generate(
             config or _DEFAULT_CONFIG,
             sheet,
             filename,
+            progress_json=progress_json,
         )
     except DyakError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)
