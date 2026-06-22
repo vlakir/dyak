@@ -246,11 +246,23 @@ def _verify_roundtrip(
         )
         return
 
+    rendered_count = 0
     for index, paragraph in enumerate(iter_paragraphs(rendered)):
+        rendered_count += 1
         actual = _normalize_ws(flatten_runs(paragraph)[0])
         original = originals[index] if index < len(originals) else ''
         if actual != original:
             report.add(
                 FindingKind.ROUNDTRIP_MISMATCH,
                 f'ожидалось «{_clip(original)}», получено «{_clip(actual)}»',
+            )
+
+    # Рендер выдал меньше параграфов, чем в образце (управляющая разметка
+    # `{%p … %}` в образце удалила параграфы) — хвост циклом не покрыт.
+    # Пустые исчезнувшие параграфы не считаем потерей данных.
+    for original in originals[rendered_count:]:
+        if original:
+            report.add(
+                FindingKind.ROUNDTRIP_MISMATCH,
+                f'ожидалось «{_clip(original)}», получено «»',
             )

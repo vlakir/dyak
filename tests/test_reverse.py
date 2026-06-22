@@ -463,6 +463,24 @@ def test_roundtrip_detects_stray_template_syntax(tmp_path: Path) -> None:
     assert 'ожидалось' in mismatches[0].message
 
 
+def test_roundtrip_detects_truncated_tail_paragraphs(tmp_path: Path) -> None:
+    # Управляющая `{%p if False %}`-разметка в образце вырезает хвостовые
+    # параграфы при forward-рендере — сверка не должна их молча терять
+    # (CodeRabbit, PR #17): рендер выдаёт меньше параграфов, чем в образце.
+    doc = Document()
+    doc.add_paragraph('Иванов')
+    doc.add_paragraph('{%p if False %}')
+    doc.add_paragraph('секрет')
+    doc.add_paragraph('{%p endif %}')
+    sample = tmp_path / 'sample.docx'
+    doc.save(sample)
+
+    _document, report = build_template(sample, _person(Фамилия='Иванов'))
+    mismatches = report.of_kind(FindingKind.ROUNDTRIP_MISMATCH)
+    assert mismatches  # исчезнувший хвост замечен, а не пропущен
+    assert any('секрет' in f.message for f in mismatches)
+
+
 def test_roundtrip_render_failure_recorded_not_raised(tmp_path: Path) -> None:
     # Забытый неизвестный тег в образце: forward-рендер падает StrictUndefined,
     # но reverse best-effort — фиксируем находкой, шаблон всё равно сохранён.
