@@ -23,6 +23,7 @@ def _make_xlsx(
     headers: list[str],
     rows: list[list[str]],
     sheet_title: str | None = None,
+    hidden_rows: set[int] | None = None,
 ) -> Path:
     wb = Workbook()
     ws = wb.active
@@ -31,6 +32,10 @@ def _make_xlsx(
     ws.append(headers)
     for row in rows:
         ws.append(row)
+    for sheet_row in hidden_rows or set():  # 1-based номера строк листа
+        ws.row_dimensions[sheet_row].hidden = True
+    if hidden_rows:
+        ws.auto_filter.ref = ws.dimensions
     wb.save(path)
     return path
 
@@ -119,6 +124,35 @@ def test_single_fullname_column_sets_source(tmp_path: Path) -> None:
     assert table.fullname_source == 'ФИО'
     assert table.people[0].cells['ФИО'] == 'Иванов Пётр Семёнович'
     assert table.roles['surname'] == 'Фамилия'
+
+
+def test_hidden_row_excluded_from_generation(tmp_path: Path) -> None:
+    # Строка 3 (Петрова) скрыта фильтром → документ по ней не формируется.
+    rows = [
+        ['Иванов', 'Пётр', 'Семёнович', 'директор', '01.07.2026'],
+        ['Петрова', 'Анна', 'Сергеевна', 'бухгалтер', '02.07.2026'],
+        ['Ким', 'Олег', 'Викторович', 'инженер', '03.07.2026'],
+    ]
+    xlsx = _make_xlsx(tmp_path / 't.xlsx', _HEADERS, rows, hidden_rows={3})
+    table = read_table(xlsx, Config())
+    surnames = [p.cells['Фамилия'] for p in table.people]
+    assert surnames == ['Иванов', 'Ким']  # Петрова отфильтрована
+
+
+def test_recognition_uses_hidden_rows(tmp_path: Path) -> None:
+    # Роль колонки «Кто» определяется ТОЛЬКО по содержимому скрытой строки:
+    # у видимой строки «Кто» пусто, у скрытой — «директор». Если распознавание
+    # игнорировало бы скрытые, роль position не появилась бы.
+    headers = ['Кто', 'Дата']
+    rows = [
+        ['', '01.01.2020'],  # видимая: «Кто» пусто
+        ['директор', '02.02.2020'],  # строка 3 — скрыта
+    ]
+    xlsx = _make_xlsx(tmp_path / 't.xlsx', headers, rows, hidden_rows={3})
+    table = read_table(xlsx, Config())
+    assert table.roles == {'position': 'Кто'}  # роль — из образца скрытой строки
+    assert len(table.people) == 1  # генерируется только видимая строка
+    assert table.people[0].cells['Кто'] == ''
 
 
 def test_sheet_selected_by_name(tmp_path: Path) -> None:
