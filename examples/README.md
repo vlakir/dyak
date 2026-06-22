@@ -202,6 +202,27 @@ PYTHONPATH=src uv run python -m dyak reverse \
 это попадёт в отчёт строкой `Расхождение при обратной сверке` (на чистом
 образце таких строк нет).
 
+**Звания в reverse (T017).** Колонка «Звание» тоже разворачивается в
+падежный тег — на образце из `personnel_ranks.xlsx`:
+
+```bash
+PYTHONPATH=src uv run python -m dyak generate \
+  --table examples/personnel_ranks.xlsx \
+  --template examples/rank_order_template.docx \
+  --out examples/output --filename "{{ Фамилия }}.docx"
+
+PYTHONPATH=src uv run python -m dyak reverse \
+  --doc "examples/output/Сидоров.docx" \
+  --table examples/personnel_ranks.xlsx --row 1 \
+  --out examples/output/reversed_rank.docx
+```
+
+В отчёте «майор медицинской службы» (просклонённое в образце как «майору
+медицинской службы») разворачивается в `{{ Звание | дт }}` — голова в
+дательном, генитивный хвост в теге сохраняется; «Личный номер» (несклоняемый)
+становится буквальным `{{ Личный_номер }}`. Падежная омонимия головы звания
+(рд = вн) помечается как «под вопросом» — так же, как у ФИО и должностей.
+
 ## Распознавание колонок по содержимому (T016)
 
 Заголовки таблицы редко стандартны: «Сотрудник» вместо «Фамилия», «ФИО»,

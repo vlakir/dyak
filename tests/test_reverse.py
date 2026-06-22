@@ -18,10 +18,11 @@ from dyak.columns import (
     NAME,
     PATRONYMIC,
     POSITION,
+    RANK,
     SURNAME,
 )
 from dyak.domain import Person
-from dyak.inflection import PetrovichInflector, PymorphyInflector
+from dyak.inflection import PetrovichInflector, PymorphyInflector, RankInflector
 from dyak.render.context import build_context
 from dyak.render.engine import render_document
 from dyak.reverse import FindingKind, build_template, format_report
@@ -53,6 +54,11 @@ def fio_inflector() -> PetrovichInflector:
 @pytest.fixture(scope='module')
 def pos_inflector() -> PymorphyInflector:
     return PymorphyInflector()
+
+
+@pytest.fixture(scope='module')
+def rank_inflector() -> RankInflector:
+    return RankInflector()
 
 
 # --- candidates ---------------------------------------------------------------
@@ -363,6 +369,59 @@ def test_position_oblique_case_roundtrip(
     )
     render_document(template, context, out)
     assert 'Назначить директором.' in _paragraph_text(Document(out))
+
+
+def test_rank_composite_oblique_case_roundtrip(
+    tmp_path: Path,
+    fio_inflector: PetrovichInflector,
+    rank_inflector: RankInflector,
+) -> None:
+    # Составное звание: голова склонилась, хвост заморожен → падежный тег;
+    # decline-and-match находит дательную форму и ставит {{ Звание | дт }}.
+    person = _person(Звание='майор медицинской службы')
+    sample = _sample_doc(
+        tmp_path / 'sample.docx', 'Благодарность майору медицинской службы.'
+    )
+    document, _report = build_template(
+        sample,
+        person,
+        roles={RANK: 'Звание'},
+        inflector=fio_inflector,
+        rank_inflector=rank_inflector,
+    )
+    assert '{{ Звание | дт }}' in _paragraph_text(document)
+
+    # Round-trip: собранный шаблон воспроизводит образец (нет mismatch).
+    template = tmp_path / 'tpl.docx'
+    document.save(template)
+    out = tmp_path / 'out.docx'
+    context = build_context(
+        person,
+        roles={RANK: 'Звание'},
+        inflector=fio_inflector,
+        rank_inflector=rank_inflector,
+    )
+    render_document(template, context, out)
+    assert 'Благодарность майору медицинской службы.' in _paragraph_text(
+        Document(out)
+    )
+
+
+def test_rank_roundtrip_clean_no_mismatch(
+    tmp_path: Path,
+    fio_inflector: PetrovichInflector,
+    rank_inflector: RankInflector,
+) -> None:
+    person = _person(Звание='капитан 3 ранга')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Представление капитана 3 ранга.')
+    _document, report = build_template(
+        sample,
+        person,
+        roles={RANK: 'Звание'},
+        inflector=fio_inflector,
+        rank_inflector=rank_inflector,
+    )
+    assert report.of_kind(FindingKind.ROUNDTRIP_MISMATCH) == []
 
 
 def test_initials_recognized_best_effort(

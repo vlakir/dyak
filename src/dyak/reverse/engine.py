@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from dyak.config import CaseForms
     from dyak.domain import Gender, Person
-    from dyak.inflection import PetrovichInflector, PymorphyInflector
+    from dyak.inflection import PetrovichInflector, PymorphyInflector, RankInflector
     from dyak.reverse.candidates import Candidate
     from dyak.reverse.matcher import Match
 
@@ -105,6 +105,8 @@ def build_template(
     gender_overrides: dict[str, Gender] | None = None,
     position_inflector: PymorphyInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
+    rank_inflector: RankInflector | None = None,
+    rank_overrides: dict[str, CaseForms] | None = None,
 ) -> tuple[Document, ReverseReport]:
     """
     Построить docx-шаблон из образца и строки данных.
@@ -122,6 +124,8 @@ def build_template(
         gender_overrides=gender_overrides,
         position_inflector=position_inflector,
         position_overrides=position_overrides,
+        rank_inflector=rank_inflector,
+        rank_overrides=rank_overrides,
     )
     matches_all: list[Match] = []
     unmatched: list[str] = []
@@ -150,6 +154,8 @@ def build_template(
         gender_overrides=gender_overrides,
         position_inflector=position_inflector,
         position_overrides=position_overrides,
+        rank_inflector=rank_inflector,
+        rank_overrides=rank_overrides,
     )
     return document, report
 
@@ -218,6 +224,8 @@ def _verify_roundtrip(
     gender_overrides: dict[str, Gender] | None,
     position_inflector: PymorphyInflector | None,
     position_overrides: dict[str, CaseForms] | None,
+    rank_inflector: RankInflector | None,
+    rank_overrides: dict[str, CaseForms] | None,
 ) -> None:
     """
     Сверить, что шаблон, прогнанный forward-рендером на той же строке,
@@ -236,6 +244,8 @@ def _verify_roundtrip(
         gender_overrides=gender_overrides,
         position_inflector=position_inflector,
         position_overrides=position_overrides,
+        rank_inflector=rank_inflector,
+        rank_overrides=rank_overrides,
     )
     try:
         rendered = _render_forward(document, context)
