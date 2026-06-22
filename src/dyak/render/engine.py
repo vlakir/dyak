@@ -96,13 +96,13 @@ def render_filename(template: str, context: dict[str, object]) -> str:
         raise UndefinedVariableError(msg) from exc
 
 
-def _iter_paragraphs(container: Document | _Cell) -> Iterator[Paragraph]:
+def iter_paragraphs(container: Document | _Cell) -> Iterator[Paragraph]:
     """Обойти все параграфы контейнера, включая вложенные таблицы."""
     yield from container.paragraphs
     for table in container.tables:
         for row in table.rows:
             for cell in row.cells:
-                yield from _iter_paragraphs(cell)
+                yield from iter_paragraphs(cell)
 
 
 def _collapse_paragraph_spaces(paragraph: Paragraph) -> None:
@@ -132,7 +132,7 @@ def render_to_document(template_path: Path, context: dict[str, object]) -> Docum
     except jinja2.UndefinedError as exc:
         msg = f'Неизвестная переменная в шаблоне: {exc}'
         raise UndefinedVariableError(msg) from exc
-    for paragraph in _iter_paragraphs(template.docx):
+    for paragraph in iter_paragraphs(template.docx):
         _collapse_paragraph_spaces(paragraph)
     return template.docx
 

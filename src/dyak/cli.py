@@ -1,8 +1,9 @@
 """
-CLI dyak (typer): команды `generate`, `check` (T004) и `init` (T005).
+CLI dyak (typer): команды `generate`, `check`, `init`, `reverse`.
 
-`generate` (T006) — подстановка по заголовкам колонок; `check` — сухой
-прогон с отчётом; `init` — выложить стартовый scaffold-набор.
+`generate` (T006) — подстановка по заголовкам колонок; `check` (T004) —
+сухой прогон с отчётом; `init` (T005) — стартовый scaffold-набор;
+`reverse` (T007) — обратная генерация шаблона из готового документа.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import typer
 
 from dyak.check import check_table, format_report
 from dyak.config import Config, load_config
-from dyak.errors import DyakError
+from dyak.errors import DyakError, ReverseError
 from dyak.inflection import PetrovichInflector, PymorphyInflector, parse_gender
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
@@ -27,11 +28,14 @@ from dyak.render.engine import (
     render_document,
     render_filename,
 )
+from dyak.reverse import build_template
+from dyak.reverse import format_report as format_reverse_report
 from dyak.scaffolding import init_project
 
 if TYPE_CHECKING:
     from dyak.config import CaseForms
     from dyak.domain import Gender
+    from dyak.reverse import ReverseReport
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +129,37 @@ def generate_documents(
 
     logger.info('Сгенерировано документов: %d → %s', len(written), out)
     return written
+
+
+def reverse_template(
+    doc: Path,
+    table: Path,
+    out: Path,
+    config: Path | None,
+    sheet: str | None,
+    row: int,
+) -> ReverseReport:
+    """Построить шаблон из образца и строки `row` (1-based); сохранить в `out`."""
+    cfg = load_config(config)
+    data = read_table(table, cfg, sheet)
+    total = len(data.people)
+    if not 1 <= row <= total:
+        msg = f'Строка {row} вне диапазона (строк данных в таблице: {total})'
+        raise ReverseError(msg)
+    document, report = build_template(
+        doc,
+        data.people[row - 1],
+        fullname_source=data.fullname_source,
+        roles=data.roles,
+        inflector=PetrovichInflector(),
+        gender_overrides=_gender_overrides(cfg),
+        position_inflector=PymorphyInflector(),
+        position_overrides=_position_overrides(cfg),
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    document.save(str(out))
+    logger.info('Шаблон собран из строки %d → %s', row, out)
+    return report
 
 
 @app.command()
@@ -255,6 +290,44 @@ def init(
         '(в шаблоне удалите блок «ШПАРГАЛКА»), затем\n'
         '  dyak generate --table table.xlsx --template template.docx --out out',
     )
+
+
+@app.command()
+def reverse(
+    doc: Annotated[
+        Path,
+        typer.Option(
+            help='Образец-документ (заполненный docx)', exists=True, dir_okay=False
+        ),
+    ],
+    table: Annotated[
+        Path,
+        typer.Option(help='Таблица данных (xlsx)', exists=True, dir_okay=False),
+    ],
+    row: Annotated[
+        int,
+        typer.Option(help='Номер строки данных (1-based), из которой сделан образец'),
+    ],
+    out: Annotated[Path, typer.Option(help='Куда сохранить собранный шаблон (docx)')],
+    config: Annotated[
+        Path | None,
+        typer.Option(help='Опциональный dyak.yaml (по умолчанию ./dyak.yaml)'),
+    ] = None,
+    sheet: Annotated[
+        str | None,
+        typer.Option(help='Имя листа (по умолчанию активный)'),
+    ] = None,
+) -> None:
+    """Собрать docx-шаблон из готового документа и строки таблицы (best-effort)."""
+    try:
+        report = reverse_template(
+            doc, table, out, config or _DEFAULT_CONFIG, sheet, row
+        )
+    except DyakError as exc:
+        typer.echo(f'Ошибка: {exc}', err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(format_reverse_report(report))
+    typer.echo(f'\nШаблон сохранён: {out}')
 
 
 if __name__ == '__main__':

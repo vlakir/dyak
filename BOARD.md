@@ -61,12 +61,27 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
      разработчика, иначе теряется фокус (классическое WIP-limit
      правило из Kanban). -->
 
-<!-- Пусто. -->
-
 ## Done
 
 <!-- Закрытые задачи, ждущие переноса в CHANGELOG.md при следующем
      релизе или значимой точке. После переноса — очищаем. -->
+
+- **T007** — Reverse-генерация шаблона из готового документа: команда
+  `dyak reverse --doc … --table … --row N --out …` — сопоставляет образец-docx
+  со строкой таблицы и выдаёт шаблон с jinja-тегами + падежными фильтрами
+  (decline-and-match), отчёт о находках, подсветка спорных мест, round-trip
+  verify. Без новых тяжёлых зависимостей (slovnet→T015, LLM→T014).
+  (`specs/T007-reverse-template/spec.md`, ветка `T007-reverse-template`).
+  [closed 2026-06-22, текущий PR]
+  Acceptance ✓ (spec §4): `reverse` ставит точные и падежные теги
+  (decline-and-match по 6 падежам, ФИО по частям/целиком, инициалы);
+  run-split тег вставляется целиком в один run; омонимия падежа → первый
+  по порядку + `ambiguous` + жёлтая подсветка; отчёт делит находки на
+  `replaced`/`ambiguous`/`not_found`/`unmatched_text`; round-trip verify
+  прогоняет шаблон через `generate` и сверяет с образцом
+  (`roundtrip_mismatch`), best-effort (падение рендера → находка, не
+  трейсбек); 0 новых зависимостей. Пример reverse в `examples/` (реально
+  прогнан). 4 проверки зелёные, coverage 93%.
 
 - **T012** — Этап 4b «Опции: PDF»: флаг `generate --pdf` — конвертация
   docx → PDF через LibreOffice headless (батч `soffice --convert-to pdf`),
