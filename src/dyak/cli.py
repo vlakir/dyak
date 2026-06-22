@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
+from dyak.check import check_table, format_report
 from dyak.config import Config, load_config
 from dyak.errors import DyakError
 from dyak.inflection import PetrovichInflector, PymorphyInflector, parse_gender
@@ -159,6 +160,43 @@ def generate(
         typer.echo(f'Ошибка: {exc}', err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f'Готово: {len(written)} документ(ов) в {out}')
+
+
+@app.command()
+def check(
+    table: Annotated[
+        Path,
+        typer.Option(help='Таблица данных (xlsx)', exists=True, dir_okay=False),
+    ],
+    template: Annotated[
+        Path,
+        typer.Option(help='Шаблон документа (docx)', exists=True, dir_okay=False),
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option(help='Опциональный dyak.yaml (по умолчанию ./dyak.yaml)'),
+    ] = None,
+    sheet: Annotated[
+        str | None,
+        typer.Option(help='Имя листа (по умолчанию активный)'),
+    ] = None,
+) -> None:
+    """Сухой прогон: проверить склонение/пол/шаблон без записи файлов."""
+    try:
+        cfg = load_config(config or _DEFAULT_CONFIG)
+        data = read_table(table, cfg, sheet)
+        report = check_table(
+            data,
+            template,
+            gender_overrides=_gender_overrides(cfg),
+            position_overrides=_position_overrides(cfg),
+        )
+    except DyakError as exc:
+        typer.echo(f'Ошибка: {exc}', err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(format_report(report))
+    if report.fatal:
+        raise typer.Exit(code=1)
 
 
 if __name__ == '__main__':

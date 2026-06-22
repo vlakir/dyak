@@ -13,3 +13,11 @@ class ConfigError(DyakError):
 
 class TableError(DyakError):
     """Ошибка чтения/валидации входной таблицы."""
+
+
+class TemplateError(DyakError):
+    """Ошибка рендера шаблона (базовая): напр. неприменимый фильтр."""
+
+
+class UndefinedVariableError(TemplateError):
+    """Шаблон ссылается на неизвестную переменную (`StrictUndefined`)."""

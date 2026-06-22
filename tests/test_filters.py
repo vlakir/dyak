@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import jinja2
 import pytest
 
 from dyak.domain import Case, Gender, Person
+from dyak.errors import TemplateError
 from dyak.inflection import PetrovichInflector, PymorphyInflector
 from dyak.render.context import build_context, normalize_lookup_key
-from dyak.render.filters import build_jinja_env, make_case_filter
+from dyak.render.filters import agree_by_gender, build_jinja_env, make_case_filter
 
 
 @pytest.fixture(scope='module')
@@ -43,6 +45,35 @@ def test_make_case_filter_passthrough_for_plain_string() -> None:
     # Должность в T002 — обычная строка; фильтр падежа отдаёт её как есть.
     genitive = make_case_filter(Case.GENT)
     assert genitive('директор') == 'директор'
+
+
+def test_agree_by_gender_picks_form(inflector: PetrovichInflector) -> None:
+    male = _ctx(inflector)['ФИО']
+    female = build_context(
+        Person(cells={'Фамилия': 'Петрова', 'Имя': 'Анна', 'Отчество': 'Сергеевна'}),
+        roles={'surname': 'Фамилия', 'name': 'Имя', 'patronymic': 'Отчество'},
+        inflector=inflector,
+    )['ФИО']
+    assert agree_by_gender(male, 'назначен', 'назначена') == 'назначен'
+    assert agree_by_gender(female, 'назначен', 'назначена') == 'назначена'
+
+
+def test_agree_by_gender_renders_in_template(inflector: PetrovichInflector) -> None:
+    env = build_jinja_env()
+    ctx = _ctx(inflector)
+    tpl = env.from_string("{{ ФИО | согл('ознакомлен', 'ознакомлена') }}")
+    assert tpl.render(ctx) == 'ознакомлен'
+
+
+def test_agree_by_gender_rejects_non_fio() -> None:
+    with pytest.raises(TemplateError, match='согл'):
+        agree_by_gender('директор', 'м', 'ж')
+
+
+def test_strict_undefined_raises_in_template(inflector: PetrovichInflector) -> None:
+    env = build_jinja_env()
+    with pytest.raises(jinja2.UndefinedError):
+        env.from_string('{{ Неизвестно }}').render(_ctx(inflector))
 
 
 def test_jinja_env_renders_fio_filters(inflector: PetrovichInflector) -> None:

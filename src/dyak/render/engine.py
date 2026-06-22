@@ -19,8 +19,10 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+import jinja2
 from docxtpl import DocxTemplate
 
+from dyak.errors import UndefinedVariableError
 from dyak.render.filters import build_jinja_env
 
 if TYPE_CHECKING:
@@ -87,7 +89,11 @@ def default_filename_template(roles: dict[str, str]) -> str | None:
 def render_filename(template: str, context: dict[str, object]) -> str:
     """Отрендерить шаблон имени выходного файла (с автопочинкой пробелов)."""
     env = build_jinja_env()
-    return env.from_string(fix_jinja_spaces(template)).render(context)
+    try:
+        return env.from_string(fix_jinja_spaces(template)).render(context)
+    except jinja2.UndefinedError as exc:
+        msg = f'Неизвестная переменная в шаблоне имени файла: {exc}'
+        raise UndefinedVariableError(msg) from exc
 
 
 def _iter_paragraphs(container: Document | _Cell) -> Iterator[Paragraph]:
@@ -113,14 +119,29 @@ def _collapse_paragraph_spaces(paragraph: Paragraph) -> None:
             in_space = text.endswith(' ')
 
 
+def render_to_document(template_path: Path, context: dict[str, object]) -> Document:
+    """
+    Отрендерить docx-шаблон в память (без записи); вернуть `Document`.
+
+    Общий путь рендера для `generate` (потом `.save`) и `check` (только в
+    память). Неизвестная переменная (`StrictUndefined`) → `TemplateError`.
+    """
+    template = DyakTemplate(template_path)
+    try:
+        template.render(context, jinja_env=build_jinja_env())
+    except jinja2.UndefinedError as exc:
+        msg = f'Неизвестная переменная в шаблоне: {exc}'
+        raise UndefinedVariableError(msg) from exc
+    for paragraph in _iter_paragraphs(template.docx):
+        _collapse_paragraph_spaces(paragraph)
+    return template.docx
+
+
 def render_document(
     template_path: Path,
     context: dict[str, object],
     output_path: Path,
 ) -> None:
     """Отрендерить docx-шаблон, подчистить двойные пробелы и сохранить."""
-    template = DyakTemplate(template_path)
-    template.render(context, jinja_env=build_jinja_env())
-    for paragraph in _iter_paragraphs(template.docx):
-        _collapse_paragraph_spaces(paragraph)
-    template.save(output_path)
+    document = render_to_document(template_path, context)
+    document.save(str(output_path))

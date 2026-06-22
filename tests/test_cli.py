@@ -197,3 +197,36 @@ def test_gender_overrides_warns_on_unparseable_value(
         overrides = _gender_overrides(cfg)
     assert overrides == {}
     assert any('мужык' in r.message for r in caplog.records)
+
+
+def test_cli_check_clean_table_exits_zero(tmp_path: Path) -> None:
+    table = _make_xlsx(tmp_path / 'emp.xlsx', _ROWS, _HEADERS)
+    template = _make_template(tmp_path / 'tpl.docx')
+    result = CliRunner().invoke(
+        app,
+        [
+            'check',
+            '--table', str(table),
+            '--template', str(template),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert 'Проблем не найдено' in result.output
+
+
+def test_cli_check_undefined_var_exits_one(tmp_path: Path) -> None:
+    table = _make_xlsx(tmp_path / 'emp.xlsx', _ROWS, _HEADERS)
+    template = tmp_path / 'bad.docx'
+    doc = Document()
+    doc.add_paragraph('{{ Опечатка }}')
+    doc.save(template)
+    result = CliRunner().invoke(
+        app,
+        [
+            'check',
+            '--table', str(table),
+            '--template', str(template),
+        ],
+    )
+    assert result.exit_code == 1
+    assert 'Опечатка' in result.output
