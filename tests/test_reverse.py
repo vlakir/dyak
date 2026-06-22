@@ -147,6 +147,14 @@ def _sample_doc(path: Path, text: str) -> Path:
     return path
 
 
+def _sample_doc_lines(path: Path, *lines: str) -> Path:
+    doc = Document()
+    for line in lines:
+        doc.add_paragraph(line)
+    doc.save(path)
+    return path
+
+
 def test_build_template_replaces_flat_values_roundtrip(tmp_path: Path) -> None:
     person = _person(
         Фамилия='Иванов', Имя='Пётр', Должность='директор', Дата_начала='01.07.2026'
@@ -422,6 +430,69 @@ def test_rank_roundtrip_clean_no_mismatch(
         rank_inflector=rank_inflector,
     )
     assert report.of_kind(FindingKind.ROUNDTRIP_MISMATCH) == []
+
+
+def test_signature_risk_warns_when_name_in_body_and_signature(
+    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PymorphyInflector
+) -> None:
+    # Субъект в теле + инициалы в подписи (та же фамилия) → имя заменено в 2
+    # местах → предупреждение «проверьте подпись/исполнителя» (T018).
+    person = _person(ФИО='Иванов Пётр Семёнович')
+    sample = _sample_doc_lines(
+        tmp_path / 'sample.docx',
+        'Назначить Иванова Петра Семёновича директором.',
+        'Директор        П. С. Иванов',
+    )
+    _document, report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles={'fullname': 'ФИО'},
+        inflector=fio_inflector,
+        position_inflector=pos_inflector,
+    )
+    risks = report.of_kind(FindingKind.SIGNATURE_RISK)
+    assert len(risks) == 1
+    assert '2 мест' in risks[0].message
+
+
+def test_signature_risk_silent_on_single_mention(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    person = _person(ФИО='Иванов Пётр Семёнович')
+    sample = _sample_doc(
+        tmp_path / 'sample.docx', 'Назначить Иванова Петра Семёновича директором.'
+    )
+    _document, report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles={'fullname': 'ФИО'},
+        inflector=fio_inflector,
+    )
+    assert report.of_kind(FindingKind.SIGNATURE_RISK) == []
+
+
+def test_signature_risk_silent_when_signer_is_other_person(
+    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PymorphyInflector
+) -> None:
+    # Подпись с ДРУГОЙ фамилией не тегируется и предупреждения не даёт.
+    person = _person(ФИО='Иванов Пётр Семёнович')
+    sample = _sample_doc_lines(
+        tmp_path / 'sample.docx',
+        'Назначить Иванова Петра Семёновича директором.',
+        'Генеральный директор        С. С. Сидоров',
+    )
+    document, report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles={'fullname': 'ФИО'},
+        inflector=fio_inflector,
+        position_inflector=pos_inflector,
+    )
+    assert report.of_kind(FindingKind.SIGNATURE_RISK) == []
+    assert 'Сидоров' in _paragraph_text(document)  # подпись осталась литералом
 
 
 def test_initials_recognized_best_effort(

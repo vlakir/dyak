@@ -196,12 +196,38 @@ def _build_report(
                 FindingKind.NOT_FOUND,
                 f'{candidate.key}: «{candidate.display}» не найдено в документе',
             )
+    _add_signature_risk(report, candidates, matches)
     for token in dict.fromkeys(unmatched):  # уникальные, порядок сохраняем
         report.add(
             FindingKind.UNMATCHED_TEXT,
             f'«{token}» — похоже на данные, но нет в строке',
         )
     return report
+
+
+def _add_signature_risk(
+    report: ReverseReport,
+    candidates: list[Candidate],
+    matches: list[Match],
+) -> None:
+    """
+    Предупредить, если имя субъекта заменено в нескольких местах (T018).
+
+    Подпись и блок исполнителя содержат фамилию/инициалы, и при совпадении с
+    субъектом строки они тоже получают тег — а там лицо обычно постоянное.
+    Reverse не знает, какое вхождение «настоящее», поэтому лишь сигналит.
+    Тело + инициалы-в-подписи дают по матчу на разных кандидатов, поэтому
+    считаем по всей семье ФИО (`name_part`), а не по одному кандидату.
+    """
+    name_keys = {c.key for c in candidates if c.name_part}
+    places = sum(1 for match in matches if match.candidate.key in name_keys)
+    if places > 1:
+        report.add(
+            FindingKind.SIGNATURE_RISK,
+            f'имя субъекта заменено тегами в {places} местах — проверьте, нет ли '
+            f'среди них подписи или блока исполнителя (там фамилия обычно '
+            f'постоянная; уберите тег, оставив текст)',
+        )
 
 
 def _render_forward(document: Document, context: dict[str, object]) -> Document:

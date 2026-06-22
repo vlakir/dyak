@@ -20,6 +20,10 @@
 - **roundtrip_mismatch** — собранный шаблон, прогнанный forward-рендером на
   той же строке, не воспроизвёл исходный документ (или рендер не удался):
   сигнал о посторонней jinja-разметке в образце либо о дефекте сборки.
+- **signature_risk** — имя субъекта заменено тегами в нескольких местах:
+  возможно, одно из них — подпись или блок исполнителя (там фамилия обычно
+  постоянная, тег лишний). Reverse не может знать, какое вхождение «настоящее»,
+  поэтому лишь предупреждает — кадровик проверяет руками (T018).
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ class FindingKind(StrEnum):
     UNMATCHED_TEXT = 'unmatched_text'
     AMBIGUOUS = 'ambiguous'  # омонимия падежа: выбран первый, подсвечено
     ROUNDTRIP_MISMATCH = 'roundtrip_mismatch'  # обратная сверка не сошлась
+    SIGNATURE_RISK = 'signature_risk'  # имя в нескольких местах — вдруг подпись
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +77,7 @@ _SECTIONS: tuple[tuple[FindingKind, str], ...] = (
     (FindingKind.AMBIGUOUS, 'Под сомнением'),
     (FindingKind.NOT_FOUND, 'Не найдено в документе'),
     (FindingKind.UNMATCHED_TEXT, 'Похоже на данные без пары в строке'),
+    (FindingKind.SIGNATURE_RISK, 'Проверьте подпись/исполнителя'),
     (FindingKind.ROUNDTRIP_MISMATCH, 'Расхождение при обратной сверке'),
 )
 
