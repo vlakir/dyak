@@ -14,10 +14,10 @@ import typer
 
 from dyak.config import Config, load_config
 from dyak.errors import DyakError
-from dyak.inflection import PetrovichInflector, parse_gender
+from dyak.inflection import PetrovichInflector, PymorphyInflector, parse_gender
 from dyak.io.excel import read_table
 from dyak.io.naming import unique_filename
-from dyak.render.context import build_context, normalize_fullname_key
+from dyak.render.context import build_context, normalize_lookup_key
 from dyak.render.engine import (
     default_filename_template,
     render_document,
@@ -25,6 +25,7 @@ from dyak.render.engine import (
 )
 
 if TYPE_CHECKING:
+    from dyak.config import CaseForms
     from dyak.domain import Gender
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def _gender_overrides(cfg: Config) -> dict[str, Gender]:
     for raw_name, raw_value in cfg.genders.items():
         gender = parse_gender(raw_value)
         if gender is not None:
-            result[normalize_fullname_key(raw_name)] = gender
+            result[normalize_lookup_key(raw_name)] = gender
         else:
             logger.warning(
                 'Неизвестное значение пола «%s» для «%s» в секции `genders` — '
@@ -57,6 +58,14 @@ def _gender_overrides(cfg: Config) -> dict[str, Gender]:
                 raw_name,
             )
     return result
+
+
+def _position_overrides(cfg: Config) -> dict[str, CaseForms]:
+    """Нормализовать `overrides.position` в `ключ должности → падежные формы`."""
+    return {
+        normalize_lookup_key(text): forms
+        for text, forms in cfg.overrides.position.items()
+    }
 
 
 def generate_documents(
@@ -80,7 +89,9 @@ def generate_documents(
         )
 
     inflector = PetrovichInflector()
+    position_inflector = PymorphyInflector()
     gender_overrides = _gender_overrides(cfg)
+    position_overrides = _position_overrides(cfg)
     used: set[str] = set()
     written: list[Path] = []
     for line, person in enumerate(data.people, start=1):
@@ -90,6 +101,8 @@ def generate_documents(
             roles=data.roles,
             inflector=inflector,
             gender_overrides=gender_overrides,
+            position_inflector=position_inflector,
+            position_overrides=position_overrides,
         )
         base = (
             f'Документ_{line}.docx'
