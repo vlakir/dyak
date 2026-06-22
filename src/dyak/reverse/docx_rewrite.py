@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from docx.enum.text import WD_COLOR_INDEX
+
 if TYPE_CHECKING:
     from docx.text.paragraph import Paragraph
 
@@ -65,10 +67,13 @@ def rewrite_paragraph(
 
     `matches` — непересекающиеся, отсортированы по началу (контракт matcher).
     Литеральный текст вне спанов сохраняется на своих run'ах (форматирование
-    не теряется), тег целиком кладётся в run начала спана.
+    не теряется), тег целиком кладётся в run начала спана. Run с тегом
+    неоднозначного падежа (`SearchForm.ambiguous`) подсвечивается, чтобы
+    кадровик нашёл спорное место и в самом шаблоне, а не только в отчёте (Q4).
     """
     runs = paragraph.runs
     new_texts = [''] * len(runs)
+    highlight: set[int] = set()
 
     def copy_literal(start: int, stop: int) -> None:
         """Разложить литеральный текст `full[start:stop]` обратно по run'ам."""
@@ -82,9 +87,14 @@ def rewrite_paragraph(
     cursor = 0
     for match in matches:
         copy_literal(cursor, match.start)
-        new_texts[_run_of(bounds, match.start)] += match.candidate.tag
+        index = _run_of(bounds, match.start)
+        new_texts[index] += match.form.tag
+        if match.form.ambiguous:
+            highlight.add(index)
         cursor = match.end
     copy_literal(cursor, len(full))
 
     for run, text in zip(runs, new_texts, strict=True):
         run.text = text
+    for index in highlight:
+        runs[index].font.highlight_color = WD_COLOR_INDEX.YELLOW

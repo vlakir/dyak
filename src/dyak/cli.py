@@ -146,7 +146,16 @@ def reverse_template(
     if not 1 <= row <= total:
         msg = f'Строка {row} вне диапазона (строк данных в таблице: {total})'
         raise ReverseError(msg)
-    document, report = build_template(doc, data.people[row - 1])
+    document, report = build_template(
+        doc,
+        data.people[row - 1],
+        fullname_source=data.fullname_source,
+        roles=data.roles,
+        inflector=PetrovichInflector(),
+        gender_overrides=_gender_overrides(cfg),
+        position_inflector=PymorphyInflector(),
+        position_overrides=_position_overrides(cfg),
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     document.save(str(out))
     logger.info('Шаблон собран из строки %d → %s', row, out)

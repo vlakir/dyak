@@ -1,15 +1,27 @@
-"""Тесты обратной генерации шаблона (`dyak reverse`, T007 фаза 1)."""
+"""Тесты обратной генерации шаблона (`dyak reverse`, T007 фазы 1–2)."""
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
+import pytest
 from docx import Document
 from openpyxl import Workbook
 from typer.testing import CliRunner
 
 from dyak.cli import app, reverse_template
+from dyak.columns import (
+    KEY_NAME,
+    KEY_PATRONYMIC,
+    KEY_SURNAME,
+    NAME,
+    PATRONYMIC,
+    POSITION,
+    SURNAME,
+)
 from dyak.domain import Person
+from dyak.inflection import PetrovichInflector, PymorphyInflector
 from dyak.render.context import build_context
 from dyak.render.engine import render_document
 from dyak.reverse import FindingKind, build_template, format_report
@@ -18,6 +30,12 @@ from dyak.reverse.docx_rewrite import flatten_runs, rewrite_paragraph
 from dyak.reverse.matcher import find_spans
 from dyak.reverse.report import Finding, ReverseReport
 
+_FIXTURE = Path(__file__).parent / 'fixtures' / 'declension.csv'
+_CASE_RUS = ('им', 'рд', 'дт', 'вн', 'тв', 'пр')
+
+# Роли для отдельных колонок Фамилия/Имя/Отчество (scenario 1, по частям).
+_PART_ROLES = {SURNAME: KEY_SURNAME, NAME: KEY_NAME, PATRONYMIC: KEY_PATRONYMIC}
+
 
 def _person(**cells: str) -> Person:
     return Person(cells=dict(cells))
@@ -25,6 +43,16 @@ def _person(**cells: str) -> Person:
 
 def _paragraph_text(doc: Document) -> str:
     return '\n'.join(p.text for p in doc.paragraphs)
+
+
+@pytest.fixture(scope='module')
+def fio_inflector() -> PetrovichInflector:
+    return PetrovichInflector()
+
+
+@pytest.fixture(scope='module')
+def pos_inflector() -> PymorphyInflector:
+    return PymorphyInflector()
 
 
 # --- candidates ---------------------------------------------------------------
@@ -36,8 +64,10 @@ def test_build_candidates_skips_empty_cells() -> None:
     keys = {c.key for c in candidates}
     assert keys == {'Фамилия'}
     (cand,) = candidates
-    assert cand.tag == '{{ Фамилия }}'
-    assert cand.forms == ('Иванов',)
+    (form,) = cand.forms
+    assert form.text == 'Иванов'
+    assert form.tag == '{{ Фамилия }}'
+    assert not form.ambiguous
 
 
 # --- matcher ------------------------------------------------------------------
@@ -47,7 +77,7 @@ def test_find_spans_exact_match() -> None:
     candidates = build_candidates(_person(Фамилия='Иванов'))
     (match,) = find_spans('Назначить Иванов', candidates)
     assert (match.start, match.end) == (10, 16)
-    assert match.candidate.tag == '{{ Фамилия }}'
+    assert match.form.tag == '{{ Фамилия }}'
 
 
 def test_find_spans_respects_word_boundary() -> None:
@@ -188,6 +218,219 @@ def test_format_report_groups_sections() -> None:
     assert 'Заменено значений: 1' in text
     assert 'Заменено:' in text
     assert 'Не найдено в документе:' in text
+
+
+# --- phase 2: decline-and-match -----------------------------------------------
+
+
+def _fixture_rows() -> list[dict[str, str]]:
+    with _FIXTURE.open(encoding='utf-8') as fh:
+        return list(csv.DictReader(fh))
+
+
+def _parts_template(
+    sample: Path,
+    person: Person,
+    fio: PetrovichInflector,
+) -> tuple[Document, ReverseReport]:
+    """Шаблон в режиме отдельных колонок ФИО (scenario 1, по частям)."""
+    return build_template(sample, person, roles=_PART_ROLES, inflector=fio)
+
+
+def _parts_context(person: Person, fio: PetrovichInflector) -> dict[str, object]:
+    return build_context(person, roles=_PART_ROLES, inflector=fio)
+
+
+def test_declension_parts_oblique_case_roundtrip(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    person = _person(Фамилия='Иванов', Имя='Пётр', Отчество='Семёнович')
+    sample = _sample_doc(
+        tmp_path / 'sample.docx', 'Вручить Иванову Петру Семёновичу уведомление.'
+    )
+    document, report = _parts_template(sample, person, fio_inflector)
+
+    body = _paragraph_text(document)
+    assert '{{ Фамилия | дт }}' in body
+    assert '{{ Имя | дт }}' in body
+    assert '{{ Отчество | дт }}' in body
+    assert report.of_kind(FindingKind.NOT_FOUND) == []
+
+    template = tmp_path / 'tpl.docx'
+    document.save(template)
+    out = tmp_path / 'out.docx'
+    render_document(template, _parts_context(person, fio_inflector), out)
+    assert (
+        'Вручить Иванову Петру Семёновичу уведомление.'
+        in _paragraph_text(Document(out))
+    )
+
+
+def test_declension_nominative_has_no_filter(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    person = _person(Фамилия='Иванов', Имя='Пётр', Отчество='Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Иванов Пётр Семёнович — директор.')
+    document, _report = _parts_template(sample, person, fio_inflector)
+    body = _paragraph_text(document)
+    assert '{{ Фамилия }}' in body
+    assert '| ' not in body  # именительный падеж — теги без фильтра
+
+
+def test_homonymous_case_marked_ambiguous(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    # Муж. фамилия «Иванова» = рд = вн → берём первый (рд) и помечаем ambiguous.
+    person = _person(Фамилия='Иванов', Имя='Пётр', Отчество='Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Касательно Иванова Петра.')
+    document, report = _parts_template(sample, person, fio_inflector)
+
+    body = _paragraph_text(document)
+    assert '{{ Фамилия | рд }}' in body
+    ambiguous = report.of_kind(FindingKind.AMBIGUOUS)
+    assert any('Фамилия' in f.message for f in ambiguous)
+
+
+def test_ambiguous_run_is_highlighted(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    person = _person(Фамилия='Иванов', Имя='Пётр', Отчество='Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Касательно Иванова.')
+    document, _report = _parts_template(sample, person, fio_inflector)
+    highlighted = [
+        run
+        for paragraph in document.paragraphs
+        for run in paragraph.runs
+        if run.font.highlight_color is not None
+    ]
+    assert highlighted, 'неоднозначный падеж должен быть подсвечен'
+
+
+@pytest.mark.parametrize('row', _fixture_rows(), ids=lambda r: f"{r['surname']}-{r['gender']}")
+@pytest.mark.parametrize('rus', _CASE_RUS)
+def test_fullname_column_roundtrip_all_cases(
+    row: dict[str, str],
+    rus: str,
+    tmp_path: Path,
+    fio_inflector: PetrovichInflector,
+) -> None:
+    """Регрессия: целое ФИО в каждом падеже даёт шаблон, воспроизводящий образец."""
+    fullname_nomn = row['им']
+    target = row[rus]
+    person = _person(ФИО=fullname_nomn)
+    sample = _sample_doc(tmp_path / 'sample.docx', f'Документ для {target}.')
+    document, _report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles=_PART_ROLES,
+        inflector=fio_inflector,
+    )
+    assert '{{ ФИО' in _paragraph_text(document)
+
+    template = tmp_path / 'tpl.docx'
+    document.save(template)
+    out = tmp_path / 'out.docx'
+    context = build_context(
+        person, fullname_source='ФИО', roles=_PART_ROLES, inflector=fio_inflector
+    )
+    render_document(template, context, out)
+    assert f'Документ для {target}.' in _paragraph_text(Document(out))
+
+
+def test_position_oblique_case_roundtrip(
+    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PymorphyInflector
+) -> None:
+    person = _person(Должность='директор')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Назначить директором.')
+    document, _report = build_template(
+        sample,
+        person,
+        roles={POSITION: 'Должность'},
+        inflector=fio_inflector,
+        position_inflector=pos_inflector,
+    )
+    assert '{{ Должность | тв }}' in _paragraph_text(document)
+
+    template = tmp_path / 'tpl.docx'
+    document.save(template)
+    out = tmp_path / 'out.docx'
+    context = build_context(
+        person,
+        roles={POSITION: 'Должность'},
+        inflector=fio_inflector,
+        position_inflector=pos_inflector,
+    )
+    render_document(template, context, out)
+    assert 'Назначить директором.' in _paragraph_text(Document(out))
+
+
+def test_initials_recognized_best_effort(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    person = _person(Фамилия='Иванов', Имя='Пётр', Отчество='Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Подпись: Иванов П. С.')
+    document, _report = _parts_template(sample, person, fio_inflector)
+    body = _paragraph_text(document)
+    assert '{{ ФИО.инициалы }}' in body
+
+    template = tmp_path / 'tpl.docx'
+    document.save(template)
+    out = tmp_path / 'out.docx'
+    render_document(template, _parts_context(person, fio_inflector), out)
+    assert 'Подпись: Иванов П. С.' in _paragraph_text(Document(out))
+
+
+def test_fullname_prefers_whole_over_parts(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    # Колонка «ФИО» + полное имя подряд → единый тег, не три части (Q3).
+    person = _person(ФИО='Иванов Пётр Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Иванов Пётр Семёнович назначен.')
+    document, _report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles=_PART_ROLES,
+        inflector=fio_inflector,
+    )
+    body = _paragraph_text(document)
+    assert '{{ ФИО }}' in body
+    assert '{{ Фамилия }}' not in body
+
+
+def test_secondary_parts_do_not_report_not_found(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    # При колонке «ФИО» производные части — вторичные: не шумят not_found.
+    person = _person(ФИО='Иванов Пётр Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Иванов Пётр Семёнович назначен.')
+    _document, report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles=_PART_ROLES,
+        inflector=fio_inflector,
+    )
+    not_found = report.of_kind(FindingKind.NOT_FOUND)
+    assert not any('Фамилия' in f.message for f in not_found)
+
+
+def test_surname_alone_tagged_with_fullname_column(
+    tmp_path: Path, fio_inflector: PetrovichInflector
+) -> None:
+    # Отдельное упоминание фамилии при колонке «ФИО» всё равно тегируется
+    # (иначе при перегенерации осталась бы фамилия исходного человека).
+    person = _person(ФИО='Иванов Пётр Семёнович')
+    sample = _sample_doc(tmp_path / 'sample.docx', 'Уведомить Иванова о решении.')
+    document, _report = build_template(
+        sample,
+        person,
+        fullname_source='ФИО',
+        roles=_PART_ROLES,
+        inflector=fio_inflector,
+    )
+    assert '{{ Фамилия | рд }}' in _paragraph_text(document)
 
 
 # --- CLI ----------------------------------------------------------------------

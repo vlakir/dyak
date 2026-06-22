@@ -1,14 +1,15 @@
 """
 Оркестратор обратной генерации шаблона (`dyak reverse`, T007 фаза 1).
 
-Читает образец-docx, по каждому параграфу (включая таблицы) ищет точные
-вхождения значений строки и переписывает run'ы, вставляя теги
-`{{ Заголовок }}`. Собирает отчёт: что заменено (`replaced`), какие значения
-строки не нашлись (`not_found`), какие фрагменты документа похожи на данные,
-но пары в строке не имеют (`unmatched_text`).
+Читает образец-docx, по каждому параграфу (включая таблицы) ищет вхождения
+форм значений строки и переписывает run'ы, вставляя теги `{{ Заголовок }}`
+(фаза 1) и теги с падежными фильтрами `{{ Фамилия | дт }}` (фаза 2,
+decline-and-match). Собирает отчёт: что заменено уверенно (`replaced`), что
+заменено с неоднозначным падежом (`ambiguous`), какие значения строки не
+нашлись (`not_found`), какие фрагменты документа похожи на данные, но пары в
+строке не имеют (`unmatched_text`).
 
-Фаза 1 — только точные (именительные) совпадения; склонение по падежам —
-фаза 2, round-trip verify — фаза 3.
+Round-trip verify (`roundtrip_mismatch`) — фаза 3.
 """
 
 from __future__ import annotations
@@ -31,7 +32,9 @@ if TYPE_CHECKING:
 
     from docx.document import Document
 
-    from dyak.domain import Person
+    from dyak.config import CaseForms
+    from dyak.domain import Gender, Person
+    from dyak.inflection import PetrovichInflector, PymorphyInflector
     from dyak.reverse.candidates import Candidate
     from dyak.reverse.matcher import Match
 
@@ -70,16 +73,35 @@ def _collect_unmatched(text: str, matches: list[Match]) -> list[str]:
     return unmatched
 
 
-def build_template(doc_path: Path, person: Person) -> tuple[Document, ReverseReport]:
+def build_template(
+    doc_path: Path,
+    person: Person,
+    *,
+    fullname_source: str | None = None,
+    roles: dict[str, str] | None = None,
+    inflector: PetrovichInflector | None = None,
+    gender_overrides: dict[str, Gender] | None = None,
+    position_inflector: PymorphyInflector | None = None,
+    position_overrides: dict[str, CaseForms] | None = None,
+) -> tuple[Document, ReverseReport]:
     """
-    Построить docx-шаблон из образца и строки данных (фаза 1).
+    Построить docx-шаблон из образца и строки данных.
 
-    Возвращает переписанный `Document` (теги вместо значений) и отчёт.
-    Образец мутируется на месте — это и есть будущий шаблон.
+    С движками склонения подставляются падежные теги (фаза 2), без них —
+    только точные именительные совпадения (фаза 1). Возвращает переписанный
+    `Document` (теги вместо значений) и отчёт; образец мутируется на месте.
     """
     document = _load(doc_path)
-    candidates = build_candidates(person)
-    counts: dict[str, int] = {}
+    candidates = build_candidates(
+        person,
+        fullname_source=fullname_source,
+        roles=roles,
+        inflector=inflector,
+        gender_overrides=gender_overrides,
+        position_inflector=position_inflector,
+        position_overrides=position_overrides,
+    )
+    matches_all: list[Match] = []
     unmatched: list[str] = []
 
     for paragraph in iter_paragraphs(document):
@@ -89,33 +111,47 @@ def build_template(doc_path: Path, person: Person) -> tuple[Document, ReverseRep
         matches = find_spans(full, candidates)
         if matches:
             rewrite_paragraph(paragraph, full, bounds, matches)
-            for match in matches:
-                counts[match.candidate.key] = counts.get(match.candidate.key, 0) + 1
+            matches_all.extend(matches)
         unmatched.extend(_collect_unmatched(full, matches))
 
-    return document, _build_report(candidates, counts, unmatched)
+    return document, _build_report(candidates, matches_all, unmatched)
 
 
 def _build_report(
     candidates: list[Candidate],
-    counts: dict[str, int],
+    matches: list[Match],
     unmatched: list[str],
 ) -> ReverseReport:
-    """Свести замены/ненайденные/несопоставленные фрагменты в отчёт."""
+    """Свести замены/неоднозначности/ненайденные/несопоставленные в отчёт."""
     report = ReverseReport()
-    for candidate in candidates:
-        value = candidate.forms[0]
-        count = counts.get(candidate.key, 0)
-        if count:
-            suffix = f' (×{count})' if count > 1 else ''
+    matched_keys: set[str] = set()
+    counts: dict[tuple[str, str, bool], int] = {}
+    order: list[tuple[str, str, bool]] = []
+    for match in matches:
+        matched_keys.add(match.candidate.key)
+        signature = (match.candidate.key, match.form.tag, match.form.ambiguous)
+        if signature not in counts:
+            order.append(signature)
+        counts[signature] = counts.get(signature, 0) + 1
+
+    display = {candidate.key: candidate.display for candidate in candidates}
+    for key, tag, ambiguous in order:
+        count = counts[key, tag, ambiguous]
+        suffix = f' (×{count})' if count > 1 else ''
+        value = display.get(key, '')
+        if ambiguous:
             report.add(
-                FindingKind.REPLACED,
-                f'{candidate.key}: «{value}» → {candidate.tag}{suffix}',
+                FindingKind.AMBIGUOUS,
+                f'{key}: «{value}» → {tag} (падеж под вопросом){suffix}',
             )
         else:
+            report.add(FindingKind.REPLACED, f'{key}: «{value}» → {tag}{suffix}')
+
+    for candidate in candidates:
+        if candidate.primary and candidate.key not in matched_keys:
             report.add(
                 FindingKind.NOT_FOUND,
-                f'{candidate.key}: «{value}» не найдено в документе',
+                f'{candidate.key}: «{candidate.display}» не найдено в документе',
             )
     for token in dict.fromkeys(unmatched):  # уникальные, порядок сохраняем
         report.add(

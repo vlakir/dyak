@@ -1,11 +1,12 @@
 """
-Поиск кандидатов в тексте параграфа и разрешение перекрытий (T007).
+Поиск форм кандидатов в тексте параграфа и разрешение перекрытий (T007).
 
-Фаза 1: точное (без учёта склонения) вхождение текста ячейки в склеенный
-текст параграфа со **словной границей** — чтобы «Анна» не совпала внутри
-«Жанна», а «5» — внутри «2025». Требование границы заодно отсекает
-склонённые формы («Иванову» не совпадёт со значением «Иванов»): косвенные
-падежи — забота фазы 2 (decline-and-match).
+Матчер ищет вхождение **любой формы** кандидата (`SearchForm.text`) в
+склеенный текст параграфа со **словной границей** — чтобы «Анна» не совпала
+внутри «Жанна», а «5» — внутри «2025». Сами формы готовят кандидаты:
+в фазе 1 это только текст ячейки (именительный), в фазе 2 — ещё и
+просклонённые по 6 падежам формы ФИО/должностей (decline-and-match), поэтому
+«Иванову» совпадёт с дательным падежом фамилии и получит тег `{{ Фамилия | дт }}`.
 
 Перекрытия (часть ФИО внутри более длинного значения, дата внутри номера и
 т.п.) разрешаются жадно: длинные кандидаты раньше коротких, занятые позиции
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from dyak.reverse.candidates import Candidate
+    from dyak.reverse.candidates import Candidate, SearchForm
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +30,7 @@ class Match:
     start: int
     end: int
     candidate: Candidate
-    form: str
+    form: SearchForm
 
     @property
     def length(self) -> int:
@@ -72,9 +73,9 @@ def find_spans(text: str, candidates: list[Candidate]) -> list[Match]:
     found: list[Match] = []
     for candidate in candidates:
         for form in candidate.forms:
-            if not form:
+            if not form.text:
                 continue
-            for start, end in _occurrences(text, form):
+            for start, end in _occurrences(text, form.text):
                 found.append(Match(start, end, candidate, form))
 
     found.sort(key=lambda m: (-m.length, m.start))
