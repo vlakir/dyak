@@ -1,10 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller onedir-сборка GUI «Дьяк» (T010).
+"""PyInstaller-сборка GUI «Дьяк» (T010): два таргета из одного Analysis.
 
-Один бандл — единая точка входа `dyak._app_entry` разводит режимы: без
-аргументов окно, с аргументами CLI-ядро (GUI зовёт ядро тем же exe через
-subprocess). Эта же onedir-сборка (`dist/dyak/`) переиспользуется и для
-инсталлятора (Inno упаковывает `dist/dyak/*`), и для portable-zip.
+Единая точка входа `dyak._app_entry` разводит режимы: без аргументов окно,
+с аргументами CLI-ядро (GUI зовёт ядро тем же exe через subprocess).
+
+- **onedir** (`dist/dyak/`) — для инсталлятора (Inno пакует папку).
+- **onefile** (`dist/dyak-portable[.exe]`) — portable: один self-extracting
+  exe без папок. Спайк T010 подтвердил: self-relaunch ядра работает и в
+  onefile (повторная распаковка во временную папку, ~секунды).
 
 Запуск из корня репозитория: `pyinstaller packaging/dyak.spec`.
 """
@@ -77,5 +80,27 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='dyak',  # → dist/dyak/
+    name='dyak',  # → dist/dyak/ (для инсталлятора, Inno пакует папку)
+)
+
+# Portable — единый self-extracting exe (onefile): один файл, без папок.
+# Тот же Analysis, но binaries/datas инлайнятся в exe, без COLLECT.
+exe_portable = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='dyak-portable',  # → dist/dyak-portable[.exe]
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=os.path.join(SRC, 'dyak', 'gui', 'assets', 'icon.ico'),
 )

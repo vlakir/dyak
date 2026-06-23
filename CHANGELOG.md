@@ -50,9 +50,11 @@ T-ID между релизами — `CHANGELOG.md` единственное per
   по тегу `vX.Y.Z` (или ручным `workflow_dispatch`) на `windows-latest`
   собираются **инсталлятор** `dyak-X.Y.Z-setup.exe` (Inno Setup, per-user
   без админ-прав, RU/EN, ярлык + иконка) и **portable** `dyak-X.Y.Z-
-  portable.zip` (распаковал и запустил, без установки Python) и
-  прикладываются к GitHub Release. Сборка — PyInstaller (одна onedir,
-  `packaging/dyak.spec`) поверх единой точки входа `dyak._app_entry`:
+  portable.exe` (единый self-extracting exe, без установки Python и без
+  вложенных папок) — два раздельных ассета GitHub Release. Сборка —
+  PyInstaller из одного `Analysis` в два таргета (`packaging/dyak.spec`):
+  onedir для инсталлятора + onefile для portable, поверх единой точки
+  входа `dyak._app_entry`:
   exe без аргументов открывает окно, с аргументами работает как CLI-ядро,
   поэтому GUI вызывает ядро тем же exe через subprocess и в бандле
   (`runner.py` не менялся). Package-data зависимостей склонения
