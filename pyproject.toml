@@ -28,6 +28,11 @@ dev = [
     "pytest-cov>=7.0",
     "pytest-asyncio>=1.0",
 ]
+# Инструменты сборки Windows-бинарников (T010). Ставятся отдельно
+# (`uv sync --group build`), не тянутся в обычный sync / тесты.
+build = [
+    "pyinstaller>=6.21",
+]
 
 
 [tool.ruff]

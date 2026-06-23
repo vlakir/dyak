@@ -46,6 +46,19 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 - Новая runtime-зависимость `PySide6-Essentials` (только для GUI-сценария;
   ядро/CLI её не импортируют). Спайк подтвердил установку и импорт на
   Python 3.14.
+- **Сборка Windows-бинарников** GUI «Дьяк» через GitHub Actions (T010):
+  по тегу `vX.Y.Z` (или ручным `workflow_dispatch`) на `windows-latest`
+  собираются **инсталлятор** `dyak-X.Y.Z-setup.exe` (Inno Setup, per-user
+  без админ-прав, RU/EN, ярлык + иконка) и **portable** `dyak-X.Y.Z-
+  portable.zip` (распаковал и запустил, без установки Python) и
+  прикладываются к GitHub Release. Сборка — PyInstaller (одна onedir,
+  `packaging/dyak.spec`) поверх единой точки входа `dyak._app_entry`:
+  exe без аргументов открывает окно, с аргументами работает как CLI-ядро,
+  поэтому GUI вызывает ядро тем же exe через subprocess и в бандле
+  (`runner.py` не менялся). Package-data зависимостей склонения
+  (`petrovich`, `pymorphy3`, словари) и GUI-ассеты включены в бандл.
+  Инструмент сборки — dependency-group `build` (`uv sync --group build`).
+  Проект начинает использовать git-теги как релизный триггер (ADR).
 
 ---
 
