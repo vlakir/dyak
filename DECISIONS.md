@@ -24,6 +24,73 @@ ADR-Lite: компактный лог архитектурных решений 
 
 <!-- Реальные решения добавляются сюда, новые сверху. -->
 
+### 2026-06-23 — Windows-сборка: PyInstaller (onedir) + Inno Setup, единый entry GUI/CLI, релиз по тегам (T010)
+
+- **Решение:** Windows-бинарники GUI «Дьяк» собираются на GitHub Actions
+  (`windows-latest`) через **PyInstaller (onedir)** + **Inno Setup**, по
+  образцу `mil_mapper`, адаптировано под наш стек. Ключевые элементы:
+  1. **Единая точка входа бандла** `src/dyak/_app_entry.py`: без
+     аргументов → GUI (`dyak.gui.app.main`), с аргументами → CLI-ядро
+     (`dyak.cli.app`); префикс `-m dyak` снимается. В бандле
+     `sys.executable` = сам exe, и GUI зовёт ядро тем же exe через
+     subprocess (`runner.base_argv()` = `sys.executable -m dyak`) —
+     **`runner.py` из T008 не меняется**. Оба импорта — в шапке
+     (правило импортов соблюдено).
+  2. **Одна** onedir-сборка (`packaging/dyak.spec`) переиспользуется для
+     обоих артефактов: инсталлятор (Inno упаковывает `dist/dyak/*`) и
+     portable-zip (тот же `dist/dyak/` + `README.txt`). Содержимое
+     идентично → вторая сборка не нужна (в отличие от mil_mapper, где у
+     portable была своя структура).
+  3. **Package-data ядра** включаются явно через
+     `collect_all('petrovich' | 'pymorphy3' | 'pymorphy3_dicts_ru')`
+     (datas+binaries+hiddenimports) + GUI-assets как `datas`
+     (`importlib.resources` находит `icon.png` в бандле).
+  4. **Инсталлятор** — Inno Setup, per-user без админ-прав
+     (`PrivilegesRequired=lowest`, `{localappdata}`), RU/EN, иконка,
+     ярлык → `dyak-<VERSION>-setup.exe`. Без миграций/диалогов
+     (у dyak нет пользовательских секретов — проще образца).
+  5. **Сборочный стек на uv:** PyInstaller в отдельной
+     dependency-group `build` (`uv sync --group build`) — в `uv.lock`
+     для воспроизводимости, но вне обычного `uv sync`/тестов.
+  6. **Релиз по git-тегам** `vX.Y.Z` (+ `workflow_dispatch` для
+     проверочного прогона); `VERSION` из `github.ref_name`; Release —
+     `softprops/action-gh-release@v2` с обоими артефактами.
+- **Контекст:** этап CONCEPT §17 (финальная инфра после GUI T008) —
+  дать кадровику готовый exe без установки Python. ТЗ в BACKLOG; план и
+  фазы — `specs/T010-windows-build/plan.md`. Образец — `mil_mapper`
+  (Poetry/3.13/tkinter; у нас uv/3.14/PySide6).
+- **Спайк (2026-06-23, локально, Linux onedir, эфемерно `uv run --with
+  pyinstaller`):** механика `frozen` одинакова на платформах, ключевые
+  риски сняты без Windows-раннера. Вызов `dyak -m dyak generate …` из
+  бандла (ровно `runner.base_argv()`) сгенерировал 3 документа,
+  JSONL-прогресс корректен; GUI-режим (без аргументов) поднимается,
+  иконка из бандла подхватывается; PyInstaller 6.21.0 под Python 3.14.5
+  собирает чисто. Выявлено: без `collect_all` падает на
+  `petrovich/rules/rules.json` → данные собираем явно. Размер onedir
+  ~221 МБ (PySide6 ~28 МБ; основной вес — numpy + `pymorphy3-dicts-ru`).
+- **Альтернативы:**
+  - **Вызов ядра in-process в бандле** (вместо subprocess) — сломал бы
+    тонкий-фронтенд T008 и живой прогресс через QProcess. Отвергнут:
+    спайк подтвердил, что subprocess работает в бандле как есть.
+  - **Два отдельных spec'а** (installer + portable, как mil_mapper) —
+    лишняя дублирующая сборка; у нас содержимое onedir идентично.
+    Отвергнут в пользу одной сборки (DRY).
+  - **Условный/ленивый импорт PySide6 в entry** (чтобы CLI-режим бандла
+    не тянул Qt) — нарушение правила «импорты в шапке»; экономия не
+    стоит того (subprocess зовётся раз на батч, не на строку).
+    Отвергнут.
+  - **Релиз без тегов (только `workflow_dispatch`)** — не даёт
+    автоматический GitHub Release; теги смыкаются с milestone-версиями
+    CHANGELOG. Отвергнут (вводим теги как релизный процесс).
+- **Последствия:** появляется воспроизводимая Windows-сборка из чистого
+  клона; релиз — постановкой тега `vX.Y.Z` на milestone-коммит.
+  +1 dev-инструмент (`pyinstaller`, группа `build`). Бандл крупный
+  (~221 МБ) — опциональная оптимизация `excludes` отложена (не блокер).
+  Windows-артефакты локально (Linux) не собрать — финальная проверка
+  инсталлятора/portable и «реальный запуск exe» только на
+  windows-раннере (`workflow_dispatch`) и вручную после первого релиза.
+  Проект начинает использовать git-теги.
+
 ### 2026-06-23 — GUI: тонкий фронтенд на PySide6 над CLI через subprocess (T008)
 
 - **Решение:** графическая оболочка dyak (T008) — **тонкий фронтенд на

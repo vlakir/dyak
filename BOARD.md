@@ -62,6 +62,7 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
      правило из Kanban). -->
 
 
+
 ## Done
 
 <!-- Закрытые задачи, ждущие переноса в CHANGELOG.md при следующем
@@ -70,3 +71,8 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
 - **T008** — GUI на PySide6 (тонкий фронтенд над CLI): окно с вкладками
   generate/check/init/reverse, живой прогресс + отмена, офлайн-справка
   [closed 2026-06-23, текущий PR `T008-gui`].
+- **T010** — Сборка Windows-бинарников GUI «Дьяк» через GitHub Actions:
+  инсталлятор (Inno Setup, per-user) + portable-zip, релиз по тегу
+  `vX.Y.Z`; единый entry GUI/CLI в PyInstaller-бандле, package-data
+  склонения собраны явно (`specs/T010-windows-build/`)
+  [closed 2026-06-23, текущий PR `T010-windows-build`].

@@ -16,9 +16,9 @@ PDF, индикатор прогресса, обратная сборка шаб
 (`reverse`), распознавание ролей колонок по содержимому (нестандартные
 заголовки без `aliases`), учёт фильтра/скрытых строк xlsx. Появилась
 **графическая оболочка** для нетехнического пользователя (`python -m
-dyak.gui`, T008, не вошла в релиз — `[Unreleased]`). Следующие этапы —
-`BACKLOG.md`: нагрузочное тестирование (T009), сборка Windows-бинарников
-(T010).
+dyak.gui`, T008) и **сборка Windows-бинарников** (инсталлятор + portable)
+через GitHub Actions по git-тегу (T010) — обе в `[Unreleased]`, не вошли
+в релиз. Следующий этап — `BACKLOG.md`: нагрузочное тестирование (T009).
 
 <!-- Архитектурные решения — в DECISIONS.md, история — в CHANGELOG.md. -->
 
@@ -70,6 +70,36 @@ JSON-события в stderr (контракт для GUI), оставляя st
 uv add <pkg>                  # runtime
 uv add --dev <pkg>            # dev
 ```
+
+## Сборка под Windows и релиз (T010)
+
+Готовые бинарники GUI «Дьяк» под Windows собирает GitHub Actions
+(`.github/workflows/build-windows.yml`) — Python ставить пользователю не
+нужно. На релиз выпускаются два артефакта:
+
+- `dyak-X.Y.Z-setup.exe` — инсталлятор (Inno Setup), установка в профиль
+  пользователя без прав администратора, ярлык на рабочий стол;
+- `dyak-X.Y.Z-portable.zip` — портативная версия (распаковал и запустил).
+
+**Релиз — постановкой git-тега** `vX.Y.Z` на milestone-коммит в `main`
+(версия должна совпадать с очередной `[N.M.0]` в `CHANGELOG.md`):
+
+```bash
+git tag v0.3.0 && git push origin v0.3.0
+```
+
+Тег запускает workflow, собирает оба артефакта и создаёт GitHub Release.
+Для проверочного прогона без релиза — ручной запуск (`workflow_dispatch`)
+во вкладке Actions. Локальная сборка (для отладки spec):
+
+```bash
+uv sync --group build
+uv run pyinstaller packaging/dyak.spec --noconfirm --clean   # → dist/dyak/
+```
+
+Бандл — единый exe (`packaging/dyak.spec` поверх `dyak._app_entry`): без
+аргументов открывает окно, с аргументами работает как CLI-ядро, поэтому
+GUI вызывает ядро тем же exe через subprocess и в собранном виде.
 
 ## Проверки перед push
 
