@@ -19,7 +19,10 @@ PrivilegesRequired=lowest
 UsePreviousAppDir=no
 DisableDirPage=auto
 DefaultGroupName={#MyAppName}
-OutputDir=.
+; Корень репозитория (.iss лежит в packaging/): setup.exe ложится рядом с
+; portable.zip, иначе upload-artifact с glob в корне его не подхватит.
+; Относительный OutputDir Inno трактует от папки .iss, поэтому через SourcePath.
+OutputDir={#SourcePath}\..
 OutputBaseFilename=dyak-{#MyAppVersion}-setup
 Compression=lzma
 SolidCompression=yes
