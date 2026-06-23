@@ -68,6 +68,17 @@ jobs:
           Compress-Archive -Path "$portable/*" -DestinationPath $zip -Force
           Write-Host "Created $zip"
 
+      - name: Assert both artifacts exist
+        shell: pwsh
+        run: |
+          # Сборка может пройти «зелёной», но артефакт молча не туда лечь
+          # (так setup.exe из packaging/ не попадал в upload). Падаем громко.
+          $setup = Get-ChildItem -Filter 'dyak-*-setup.exe' -ErrorAction SilentlyContinue
+          $portable = Get-ChildItem -Filter 'dyak-*-portable.zip' -ErrorAction SilentlyContinue
+          if (-not $setup) { Write-Error 'dyak-*-setup.exe не найден в корне'; exit 1 }
+          if (-not $portable) { Write-Error 'dyak-*-portable.zip не найден в корне'; exit 1 }
+          Write-Host "OK: $($setup.Name), $($portable.Name)"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
