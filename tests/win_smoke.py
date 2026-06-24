@@ -69,8 +69,17 @@ def find_problems(out_dir: Path) -> list[str]:
     return [form for form in _EXPECTED if form not in text]
 
 
+def _force_utf8_output() -> None:
+    """UTF-8 на собственный stdout/stderr — иначе кириллица падает на cp1252 CI."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, 'reconfigure', None)
+        if callable(reconfigure):
+            reconfigure(encoding='utf-8', errors='replace')
+
+
 def main(argv: list[str]) -> int:
     """Диспетчер: `make <dir>` строит фикстуру, `check <dir>` проверяет вывод."""
+    _force_utf8_output()
     if len(argv) != 2:  # noqa: PLR2004 — ровно команда + путь
         sys.stderr.write('usage: win_smoke.py make|check <dir>\n')
         return 2

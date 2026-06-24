@@ -57,6 +57,12 @@ jobs:
 
       - name: Smoke — собранный exe корректно склоняет (T021)
         shell: pwsh
+        env:
+          # Ровно как GUI выставляет ядру-подпроцессу (T023): без UTF-8 ядро на
+          # не-UTF-8-stdout раннера (cp1252) падает UnicodeEncodeError на выводе
+          # «Готово» кириллицей и подвисает. Это представительно для GUI-вызова.
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: |
           # Retrospective 0.3.0: CI проверял лишь факт создания файлов, не их
           # содержимое — так баг T021 (petrovich в cp1251 не склонял фамилию на
@@ -65,17 +71,16 @@ jobs:
           uv run python tests/win_smoke.py make _smoke
           New-Item -ItemType Directory -Force -Path _smoke/out | Out-Null
           # Windowed-exe (console=False) без консоли пишет в невалидный stdout —
-          # редиректим потоки в файлы. Ждём завершения с ТАЙМАУТОМ (зависший
-          # процесс иначе держит job), потом дампим потоки — видно причину.
+          # редиректим потоки в файлы. Ждём завершения с таймаутом-страховкой.
           $p = Start-Process -FilePath 'dist/dyak-portable.exe' `
             -ArgumentList 'generate','--table','_smoke/table.xlsx','--template','_smoke/template.docx','--out','_smoke/out' `
             -PassThru `
             -RedirectStandardOutput _smoke/out.log -RedirectStandardError _smoke/err.log
-          if ($p.WaitForExit(120000)) {
+          if ($p.WaitForExit(90000)) {
             Write-Host "exe exit code: $($p.ExitCode)"
           } else {
             try { $p.Kill() } catch {}
-            Write-Host '::warning::exe не завершился за 120с — убит'
+            Write-Host '::warning::exe не завершился за 90с — убит'
           }
           Write-Host '--- stdout ---'; Get-Content _smoke/out.log -ErrorAction SilentlyContinue
           Write-Host '--- stderr ---'; Get-Content _smoke/err.log -ErrorAction SilentlyContinue
