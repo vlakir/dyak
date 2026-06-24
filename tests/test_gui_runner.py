@@ -38,6 +38,20 @@ def test_build_generate_argv_skips_blank_options():
     assert "--config" not in argv
 
 
+def test_subprocess_env_forces_utf8():
+    # T023: ядро-подпроцесс должно писать UTF-8, иначе на рус. Windows GUI
+    # получает cp1251 и показывает кракозябры в окне лога.
+    env = runner.subprocess_env({})
+    assert env["PYTHONUTF8"] == "1"
+    assert env["PYTHONIOENCODING"] == "utf-8"
+
+
+def test_subprocess_env_preserves_base():
+    env = runner.subprocess_env({"PATH": "/bin", "PYTHONUTF8": "0"})
+    assert env["PATH"] == "/bin"  # базовое окружение сохранено
+    assert env["PYTHONUTF8"] == "1"  # наш форс перекрывает
+
+
 def test_parse_progress_line_valid_event():
     event = runner.parse_progress_line('{"event": "progress", "done": 2, "total": 5}')
     assert event == {"event": "progress", "done": 2, "total": 5}

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sys
 
-from dyak.cli import app
+from dyak.cli import app, configure_stdio
 from dyak.gui.app import main as gui_main
 
 
@@ -24,6 +24,7 @@ def run() -> int:
     if argv[:2] == ['-m', 'dyak']:  # subprocess-вызов ядра из GUI-бандла
         argv = argv[2:]
     if argv:
+        configure_stdio()  # UTF-8 stdout при запуске ядра из GUI (T023)
         sys.argv = ['dyak', *argv]
         app()
         return 0

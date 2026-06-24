@@ -9,6 +9,8 @@ CLI dyak (typer): команды `generate`, `check`, `init`, `reverse`.
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -50,6 +52,25 @@ app = typer.Typer(
 )
 
 _DEFAULT_CONFIG = Path('dyak.yaml')
+
+
+def configure_stdio() -> None:
+    """
+    UTF-8 на stdout/stderr, если ядро запущено с `PYTHONUTF8=1` (из GUI, T023).
+
+    Frozen-интерпретатор PyInstaller НЕ honor-ит `PYTHONUTF8` для кодировки
+    потоков (проверено Windows CI: ядро падало `UnicodeEncodeError` на выводе
+    кириллицы), поэтому переключаем явно: GUI выставляет подпроцессу
+    `PYTHONUTF8=1` (`gui/runner.subprocess_env`), а ядро по этому флагу эмитит
+    UTF-8 — совпадая с UTF-8-декодом окна лога. Прямой CLI (без `PYTHONUTF8`)
+    не затрагивается: вывод в нативную консоль (cp1251 на рус. Windows) остаётся.
+    """
+    if os.environ.get('PYTHONUTF8') != '1':
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, 'reconfigure', None)
+        if callable(reconfigure):
+            reconfigure(encoding='utf-8')
 
 
 @app.callback()

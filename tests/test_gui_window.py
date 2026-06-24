@@ -37,6 +37,7 @@ class _FakeProcess:
         self.arguments: list[str] = []
         self.started = False
         self.killed = False
+        self.process_environment = None
         self.readyReadStandardError = _Signal()
         self.readyReadStandardOutput = _Signal()
         self.finished = _Signal()
@@ -49,6 +50,9 @@ class _FakeProcess:
 
     def setArguments(self, arguments: list[str]) -> None:  # noqa: N802
         self.arguments = arguments
+
+    def setProcessEnvironment(self, env) -> None:  # noqa: ANN001, N802
+        self.process_environment = env
 
     def start(self) -> None:
         self.started = True
@@ -157,6 +161,8 @@ def test_start_wires_process(window, monkeypatch):
     assert proc.program == "python"
     assert proc.arguments == argv[1:]
     assert proc.started is True
+    # T023: дочернему процессу выставлено UTF-8-окружение.
+    assert proc.process_environment.value("PYTHONUTF8") == "1"
     assert window._proc is proc
     assert window._cancel_button.isEnabled() is True
     for button in window._run_buttons:

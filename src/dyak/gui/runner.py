@@ -22,6 +22,10 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,25 @@ class CommandResult:
 def base_argv() -> list[str]:
     """Префикс запуска ядра тем же интерпретатором: ``python -m dyak``."""
     return [sys.executable, '-m', 'dyak']
+
+
+def subprocess_env(base: Mapping[str, str]) -> dict[str, str]:
+    """
+    Окружение для ядра-подпроцесса: форсировать UTF-8 на stdout/stderr (T023).
+
+    GUI читает потоки `QProcess` как UTF-8, а дочерний Python на русской
+    Windows по умолчанию пишет stdout/stderr в локальную `cp1251` (поток —
+    пайп, не консоль) → в окне лога кракозябры. `PYTHONUTF8=1` (UTF-8-режим)
+    и `PYTHONIOENCODING=utf-8` выравнивают кодировку дочернего процесса с
+    UTF-8-декодом GUI; оба honor-ятся и встроенным интерпретатором
+    PyInstaller-бандла. Linux (UTF-8 по умолчанию) не затронут. Кодировку
+    прямого CLI (вывод в cp1251-консоль Windows) это не меняет — правится
+    только подпроцесс под GUI.
+    """
+    env = dict(base)
+    env['PYTHONUTF8'] = '1'
+    env['PYTHONIOENCODING'] = 'utf-8'
+    return env
 
 
 def _opt(flag: str, value: str | None) -> list[str]:
