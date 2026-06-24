@@ -79,7 +79,8 @@ uv add --dev <pkg>            # dev
 
 - `dyak-X.Y.Z-setup.exe` — инсталлятор (Inno Setup), установка в профиль
   пользователя без прав администратора, ярлык на рабочий стол;
-- `dyak-X.Y.Z-portable.zip` — портативная версия (распаковал и запустил).
+- `dyak-X.Y.Z-portable.exe` — портативная версия одним файлом (без
+  установки и без вложенных папок; стартует чуть дольше из-за распаковки).
 
 **Релиз — постановкой git-тега** `vX.Y.Z` на milestone-коммит в `main`
 (версия должна совпадать с очередной `[N.M.0]` в `CHANGELOG.md`):
@@ -94,7 +95,8 @@ git tag v0.3.0 && git push origin v0.3.0
 
 ```bash
 uv sync --group build
-uv run pyinstaller packaging/dyak.spec --noconfirm --clean   # → dist/dyak/
+# → dist/dyak/ (onedir для инсталлятора) + dist/dyak-portable (onefile)
+uv run pyinstaller packaging/dyak.spec --noconfirm --clean
 ```
 
 Бандл — единый exe (`packaging/dyak.spec` поверх `dyak._app_entry`): без
