@@ -10,7 +10,7 @@ from docx import Document
 from openpyxl import Workbook
 from typer.testing import CliRunner
 
-from dyak.cli import _gender_overrides, app, generate_documents
+from dyak.cli import _gender_overrides, app, configure_stdio, generate_documents
 from dyak.config import Config
 from dyak.domain import Gender
 
@@ -230,3 +230,33 @@ def test_cli_check_undefined_var_exits_one(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1
     assert 'Опечатка' in result.output
+
+
+class _RecordingStream:
+    def __init__(self) -> None:
+        self.encodings: list[str] = []
+
+    def reconfigure(self, *, encoding: str) -> None:
+        self.encodings.append(encoding)
+
+
+def test_configure_stdio_switches_to_utf8_when_flagged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # T023: ядро из GUI (PYTHONUTF8=1) переключает потоки на UTF-8.
+    monkeypatch.setenv('PYTHONUTF8', '1')
+    out, err = _RecordingStream(), _RecordingStream()
+    monkeypatch.setattr('dyak.cli.sys.stdout', out)
+    monkeypatch.setattr('dyak.cli.sys.stderr', err)
+    configure_stdio()
+    assert out.encodings == ['utf-8']
+    assert err.encodings == ['utf-8']
+
+
+def test_configure_stdio_noop_without_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Прямой CLI (без PYTHONUTF8) — потоки не трогаем (нативная консоль).
+    monkeypatch.delenv('PYTHONUTF8', raising=False)
+    out = _RecordingStream()
+    monkeypatch.setattr('dyak.cli.sys.stdout', out)
+    configure_stdio()
+    assert out.encodings == []

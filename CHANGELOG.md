@@ -43,9 +43,13 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 - **Windows-GUI: кракозябры в окне лога** (T023) — итоги и warning'и
   отображались битыми символами. Дочерний Python на русской Windows писал
   stdout/stderr в `cp1251` (поток — пайп, не консоль), а GUI декодировал
-  UTF-8. Фикс — GUI выставляет ядру-подпроцессу `PYTHONUTF8=1` /
-  `PYTHONIOENCODING=utf-8` через `QProcess.setProcessEnvironment`; кодировка
-  прямого CLI не затронута. Linux-GUI без изменений.
+  UTF-8. Фикс из двух частей: (1) GUI выставляет ядру-подпроцессу
+  `PYTHONUTF8=1` через `QProcess.setProcessEnvironment`; (2) ядро по этому
+  флагу **явно** переключает `sys.stdout/stderr` на UTF-8 при старте
+  (`cli.configure_stdio`) — потому что **frozen-интерпретатор PyInstaller не
+  honor-ит `PYTHONUTF8`** для кодировки потоков (выявлено Windows CI: ядро
+  падало `UnicodeEncodeError` на выводе кириллицы). Кодировка прямого CLI (без
+  `PYTHONUTF8`) не затронута — нативная консоль cp1251. Linux-GUI без изменений.
 
 ---
 
