@@ -12,7 +12,7 @@
 `ambiguous` (отчёт + подсветка).
 
 Источник склоняемых объектов — тот же `build_context`, что у `generate`:
-переиспользуем `Fio`/`NamePart`/`Position` и не дублируем логику ролей/пола.
+переиспользуем `Fio`/`NamePart`/`Phrase` и не дублируем логику ролей/пола.
 Без движков (`inflector`/`position_inflector` = `None`) поведение совпадает с
 фазой 1 — кандидаты только из плоских ячеек.
 
@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from dyak.domain import CASE_RUS, Case
-from dyak.inflection import Fio, NamePart, Position, Rank
+from dyak.inflection import Fio, NamePart, Phrase, Rank
 from dyak.render.context import KEY_FULLNAME, build_context
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from dyak.inflection import (
         Declinable,
         PetrovichInflector,
-        PymorphyInflector,
+        PhraseInflector,
         RankInflector,
     )
 
@@ -154,7 +154,7 @@ def _declinable_candidates(
     """Склоняемые кандидаты из контекста (части ФИО, должность, ФИО, инициалы)."""
     candidates: list[Candidate] = []
     for key, value in context.items():
-        if isinstance(value, NamePart | Position | Rank):
+        if isinstance(value, NamePart | Phrase | Rank):
             forms = _decline_forms(value, key)
             if not forms:
                 continue
@@ -187,7 +187,7 @@ def build_candidates(
     roles: dict[str, str] | None = None,
     inflector: PetrovichInflector | None = None,
     gender_overrides: dict[str, Gender] | None = None,
-    position_inflector: PymorphyInflector | None = None,
+    position_inflector: PhraseInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
     rank_inflector: RankInflector | None = None,
     rank_overrides: dict[str, CaseForms] | None = None,

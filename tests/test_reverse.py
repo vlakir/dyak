@@ -22,7 +22,7 @@ from dyak.columns import (
     SURNAME,
 )
 from dyak.domain import Person
-from dyak.inflection import PetrovichInflector, PymorphyInflector, RankInflector
+from dyak.inflection import PetrovichInflector, PhraseInflector, RankInflector
 from dyak.render.context import build_context
 from dyak.render.engine import render_document
 from dyak.reverse import FindingKind, build_template, format_report
@@ -52,8 +52,8 @@ def fio_inflector() -> PetrovichInflector:
 
 
 @pytest.fixture(scope='module')
-def pos_inflector() -> PymorphyInflector:
-    return PymorphyInflector()
+def pos_inflector() -> PhraseInflector:
+    return PhraseInflector()
 
 
 @pytest.fixture(scope='module')
@@ -353,7 +353,7 @@ def test_fullname_column_roundtrip_all_cases(
 
 
 def test_position_oblique_case_roundtrip(
-    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PymorphyInflector
+    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PhraseInflector
 ) -> None:
     person = _person(Должность='директор')
     sample = _sample_doc(tmp_path / 'sample.docx', 'Назначить директором.')
@@ -433,7 +433,7 @@ def test_rank_roundtrip_clean_no_mismatch(
 
 
 def test_signature_risk_warns_when_name_in_body_and_signature(
-    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PymorphyInflector
+    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PhraseInflector
 ) -> None:
     # Субъект в теле + инициалы в подписи (та же фамилия) → имя заменено в 2
     # местах → предупреждение «проверьте подпись/исполнителя» (T018).
@@ -474,7 +474,7 @@ def test_signature_risk_silent_on_single_mention(
 
 
 def test_signature_risk_silent_when_signer_is_other_person(
-    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PymorphyInflector
+    tmp_path: Path, fio_inflector: PetrovichInflector, pos_inflector: PhraseInflector
 ) -> None:
     # Подпись с ДРУГОЙ фамилией не тегируется и предупреждения не даёт.
     person = _person(ФИО='Иванов Пётр Семёнович')
