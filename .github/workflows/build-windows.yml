@@ -54,6 +54,21 @@ jobs:
           }
           Write-Host 'OK: dist/dyak/dyak.exe, dist/dyak-portable.exe'
 
+      - name: Smoke — собранный exe корректно склоняет (T021)
+        shell: pwsh
+        run: |
+          # Retrospective 0.3.0: CI проверял лишь факт создания файлов, не их
+          # содержимое — так баг T021 (petrovich в cp1251 не склонял фамилию на
+          # русской Windows) ушёл в релиз. Здесь собранный (frozen) exe реально
+          # генерирует из фикстуры, а чек ассертит дательный падеж в документе.
+          uv run python tests/win_smoke.py make _smoke
+          # Все потоки → файл: windowed-exe без консоли иначе пишет в невалидный
+          # stdout. Файлы документов пишутся независимо от потоков.
+          & 'dist/dyak-portable.exe' generate --table _smoke/table.xlsx --template _smoke/template.docx --out _smoke/out *> _smoke/gen.log
+          Get-Content _smoke/gen.log -ErrorAction SilentlyContinue
+          uv run python tests/win_smoke.py check _smoke/out
+          if ($LASTEXITCODE -ne 0) { Write-Error 'Windows smoke: склонение неверно — см. лог выше'; exit 1 }
+
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 

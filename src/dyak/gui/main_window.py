@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QProcess
+from PySide6.QtCore import QProcess, QProcessEnvironment
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -188,6 +188,12 @@ class MainWindow(QMainWindow):
         proc = QProcess(self)
         proc.setProgram(argv[0])
         proc.setArguments(argv[1:])
+        # Ядро-подпроцесс пишет UTF-8 (T023): иначе на русской Windows stdout
+        # уходит в cp1251, а GUI декодирует UTF-8 → кракозябры в окне лога.
+        qenv = QProcessEnvironment.systemEnvironment()
+        for key, value in runner.subprocess_env({}).items():
+            qenv.insert(key, value)
+        proc.setProcessEnvironment(qenv)
         proc.readyReadStandardError.connect(self._on_stderr)
         proc.readyReadStandardOutput.connect(self._on_stdout)
         proc.finished.connect(self._on_finished)

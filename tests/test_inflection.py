@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import pytest
+from petrovich.enums import Case as PCase
+from petrovich.enums import Gender as PGender
+from petrovich.main import DEFAULT_RULES_PATH, Petrovich
 
 from dyak.domain import Case, Gender
 from dyak.inflection import Fio, Initials, NamePart, PetrovichInflector
@@ -64,6 +68,24 @@ def test_uppercase_surname_declines_uppercase(inflector: PetrovichInflector) -> 
     part = NamePart('ИВАНОВ', 'surname', Gender.MALE, inflector)
     assert part.inflect(Case.GENT) == 'ИВАНОВА'
     assert part.inflect(Case.DATV) == 'ИВАНОВУ'
+
+
+def test_utf8_rules_load_fixes_locale_decode(inflector: PetrovichInflector) -> None:
+    """Регрессия T021: правила читаются UTF-8, а не локальной кодировкой.
+
+    На русской Windows дефолтный `open()` берёт `cp1251`: UTF-8-кириллица в
+    суффиксах `rules.json` мис-декодируется, тесты правил не совпадают, фамилия
+    проходит несклонённой. Воспроизводим механизм (cp1251-загрузка молча не
+    склоняет) и подтверждаем, что наша UTF-8-обёртка склоняет.
+    """
+    broken = Petrovich.__new__(Petrovich)
+    with Path(DEFAULT_RULES_PATH).open(encoding='cp1251') as fp:
+        broken.data = json.load(fp)
+    # Старый путь: cp1251 ломает правила → фамилия не склоняется (баг T021).
+    assert broken.lastname('Пупкин', PCase.DATIVE, PGender.MALE) == 'Пупкин'
+    # Фикс: UTF-8-обёртка (внутри `PetrovichInflector`) склоняет.
+    part = NamePart('Пупкин', 'surname', Gender.MALE, inflector)
+    assert part.inflect(Case.DATV) == 'Пупкину'
 
 
 def test_namepart_str_is_nominative(inflector: PetrovichInflector) -> None:

@@ -19,11 +19,13 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from petrovich.enums import Case as PCase
 from petrovich.enums import Gender as PGender
-from petrovich.main import Petrovich
+from petrovich.main import DEFAULT_RULES_PATH, Petrovich
 
 from dyak.domain import Case, Gender
 
@@ -47,11 +49,30 @@ _PETROVICH_GENDER: dict[Gender, str] = {
 }
 
 
+class _Utf8Petrovich(Petrovich):
+    """
+    `Petrovich`, читающий `rules.json` явным UTF-8 (фикс T021).
+
+    Штатный `Petrovich.__init__` открывает `rules.json` через `open(path, 'r')`
+    без указания кодировки — берётся локальная (`locale.getpreferredencoding`).
+    На русской Windows это `cp1251`, и UTF-8-кириллица в суффиксах правил
+    мис-декодируется: тесты правил перестают совпадать, фамилия молча проходит
+    несклонённой (ПУПКИН вместо ПУПКИНУ) — баг проявился в Windows-сборке
+    v0.3.0, тогда как Linux (UTF-8 по умолчанию) не затронут. Грузим правила
+    сами с `encoding='utf-8'`, поэтому фикс не зависит от окружения и работает
+    как из GUI, так и при прямом запуске exe (без `PYTHONUTF8`).
+    """
+
+    def __init__(self) -> None:
+        with Path(DEFAULT_RULES_PATH).open(encoding='utf-8') as fp:
+            self.data = json.load(fp)
+
+
 class PetrovichInflector:
     """Склоняет фамилию/имя/отчество с учётом пола, регистра и пустых строк."""
 
     def __init__(self) -> None:
-        self._petrovich = Petrovich()
+        self._petrovich = _Utf8Petrovich()
 
     def inflect(self, text: str, kind: NameKind, case: Case, gender: Gender) -> str:
         """Просклонять часть ФИО `kind` к падежу `case` для пола `gender`."""

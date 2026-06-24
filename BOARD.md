@@ -76,3 +76,10 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
   `vX.Y.Z`; единый entry GUI/CLI в PyInstaller-бандле, package-data
   склонения собраны явно (`specs/T010-windows-build/`)
   [closed 2026-06-23, текущий PR `T010-windows-build`].
+- **T021** — Windows-фикс: ФИО (petrovich) не склонялось во frozen-сборке —
+  `rules.json` читался в локальной cp1251 вместо UTF-8; обёртка
+  `_Utf8Petrovich` + Windows CI smoke-шаг на корректность склонения
+  [closed 2026-06-25, PR `T021-T023-windows-encoding`].
+- **T023** — Windows-GUI: кракозябры в окне лога — ядро-подпроцесс пишет
+  UTF-8 через `PYTHONUTF8=1`/`PYTHONIOENCODING` в `QProcess`-окружении
+  [closed 2026-06-25, PR `T021-T023-windows-encoding`].
