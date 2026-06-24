@@ -1,6 +1,6 @@
 [project]
 name = "dyak"
-version = "0.2.0"
+version = "0.3.0"
 description = "CLI-генератор кадровых документов с автоматическим русским склонением ФИО и должностей по падежам"
 readme = "README.md"
 authors = [
