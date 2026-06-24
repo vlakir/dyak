@@ -68,23 +68,5 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
 <!-- Закрытые задачи, ждущие переноса в CHANGELOG.md при следующем
      релизе или значимой точке. После переноса — очищаем. -->
 
-- **T008** — GUI на PySide6 (тонкий фронтенд над CLI): окно с вкладками
-  generate/check/init/reverse, живой прогресс + отмена, офлайн-справка
-  [closed 2026-06-23, текущий PR `T008-gui`].
-- **T010** — Сборка Windows-бинарников GUI «Дьяк» через GitHub Actions:
-  инсталлятор (Inno Setup, per-user) + portable-zip, релиз по тегу
-  `vX.Y.Z`; единый entry GUI/CLI в PyInstaller-бандле, package-data
-  склонения собраны явно (`specs/T010-windows-build/`)
-  [closed 2026-06-23, текущий PR `T010-windows-build`].
-- **T021** — Windows-фикс: ФИО (petrovich) не склонялось во frozen-сборке —
-  `rules.json` читался в локальной cp1251 вместо UTF-8; обёртка
-  `_Utf8Petrovich` + Windows CI smoke-шаг на корректность склонения
-  [closed 2026-06-25, PR `T021-T023-windows-encoding`].
-- **T023** — Windows-GUI: кракозябры в окне лога — ядро-подпроцесс пишет
-  UTF-8 через `PYTHONUTF8=1`/`PYTHONIOENCODING` в `QProcess`-окружении
-  [closed 2026-06-25, PR `T021-T023-windows-encoding`].
-- **T024** — Модель «склонение по умолчанию»: универсальный фраз-движок
-  (`PhraseInflector`) склоняет любую текстовую колонку; голова+согласование,
-  замороженный родительный хвост, одушевлённость вн, составные должности;
-  суперсёдит T020, поглощает T022 (`specs/T024-inflection-by-default/`)
-  [closed 2026-06-25, PR `T024-inflection-by-default`].
+<!-- Пусто: T008/T010 → CHANGELOG [0.3.0]; T021/T023/T024 → CHANGELOG [0.3.1]. -->
+<!-- Следующее по этапам — T009 (нагрузочное) в BACKLOG.md. -->
