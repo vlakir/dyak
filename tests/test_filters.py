@@ -7,7 +7,7 @@ import pytest
 
 from dyak.domain import Case, Gender, Person
 from dyak.errors import TemplateError
-from dyak.inflection import PetrovichInflector, PymorphyInflector
+from dyak.inflection import PetrovichInflector, PhraseInflector
 from dyak.render.context import build_context, normalize_lookup_key
 from dyak.render.filters import agree_by_gender, build_jinja_env, make_case_filter
 
@@ -131,7 +131,7 @@ def test_context_without_name_roles_stays_flat(inflector: PetrovichInflector) ->
 
 def test_position_declines_in_template(inflector: PetrovichInflector) -> None:
     # T003: должность под падежным фильтром склоняется (раньше проходила как есть).
-    ctx = _ctx(inflector, position_inflector=PymorphyInflector())
+    ctx = _ctx(inflector, position_inflector=PhraseInflector())
     env = build_jinja_env()
     tpl = env.from_string('на должность {{ Должность | рд }}')
     assert tpl.render(ctx) == 'на должность директора'
@@ -144,7 +144,7 @@ def test_position_override_applies_in_context(inflector: PetrovichInflector) -> 
         person,
         roles={'position': 'Должность'},
         inflector=inflector,
-        position_inflector=PymorphyInflector(),
+        position_inflector=PhraseInflector(),
         position_overrides={key: {'дт': 'заместителю генерального директора'}},
     )
     assert ctx['Должность'].inflect(Case.DATV) == 'заместителю генерального директора'

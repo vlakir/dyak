@@ -21,7 +21,7 @@ from dyak.config import Config, load_config
 from dyak.errors import DyakError, ReverseError
 from dyak.inflection import (
     PetrovichInflector,
-    PymorphyInflector,
+    PhraseInflector,
     RankInflector,
     parse_gender,
 )
@@ -133,7 +133,7 @@ def generate_documents(
         )
 
     inflector = PetrovichInflector()
-    position_inflector = PymorphyInflector()
+    position_inflector = PhraseInflector()
     rank_inflector = RankInflector()
     gender_overrides = _gender_overrides(cfg)
     position_overrides = _position_overrides(cfg)
@@ -190,7 +190,7 @@ def reverse_template(
         roles=data.roles,
         inflector=PetrovichInflector(),
         gender_overrides=_gender_overrides(cfg),
-        position_inflector=PymorphyInflector(),
+        position_inflector=PhraseInflector(),
         position_overrides=_position_overrides(cfg),
         rank_inflector=RankInflector(),
         rank_overrides=_rank_overrides(cfg),

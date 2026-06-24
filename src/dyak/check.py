@@ -6,7 +6,7 @@
 
 - **undefined** — неизвестная переменная шаблона (`StrictUndefined`);
   фатально (опечатка в теге сломает и `generate`).
-- **not_declined** — склоняемое значение (часть ФИО или должность), которое
+- **not_declined** — склоняемое значение (часть ФИО, фраза или звание), которое
   ни в одном косвенном падеже не меняется: кандидат на `override` либо
   легитимно несклоняемое (иностранная фамилия) — решает кадровик.
 - **gender_ambiguous** — пол не определился (взят мужской по умолчанию).
@@ -29,8 +29,8 @@ from dyak.inflection import (
     GenderSource,
     NamePart,
     PetrovichInflector,
-    Position,
-    PymorphyInflector,
+    Phrase,
+    PhraseInflector,
     Rank,
     RankInflector,
 )
@@ -85,20 +85,20 @@ class CheckReport:
         return any(issue.kind in fatal_kinds for issue in self.issues)
 
 
-def _declines(value: NamePart | Position | Rank) -> bool:
+def _declines(value: NamePart | Phrase | Rank) -> bool:
     """Меняется ли значение хоть в одном косвенном падеже."""
     base = value.text
     return any(value.inflect(case) != base for case in _OBLIQUE)
 
 
-_NOT_DECLINED_KIND = {Position: 'должность', Rank: 'звание'}
+_NOT_DECLINED_KIND = {Phrase: 'значение', Rank: 'звание'}
 
 
 def _check_declension(row: int, context: dict[str, object]) -> list[Issue]:
-    """Найти склоняемые «листья» (ФИО/должность/звание), которые не склоняются."""
+    """Найти склоняемые «листья» (ФИО/фраза/звание), которые не склоняются."""
     issues: list[Issue] = []
     for value in context.values():
-        if not isinstance(value, (NamePart, Position, Rank)):
+        if not isinstance(value, (NamePart, Phrase, Rank)):
             continue
         if not value.text or _declines(value):
             continue
@@ -157,7 +157,7 @@ def check_table(
 ) -> CheckReport:
     """Сухой прогон: рендер каждой строки в память + сбор отчёта."""
     inflector = PetrovichInflector()
-    position_inflector = PymorphyInflector()
+    position_inflector = PhraseInflector()
     rank_inflector = RankInflector()
     issues: list[Issue] = []
     for row, person in enumerate(table.people, start=1):

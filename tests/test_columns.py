@@ -54,13 +54,25 @@ def test_unrecognized_headers_have_no_roles() -> None:
     assert rec.fullname_source is None
 
 
-def test_duplicate_role_first_wins_and_warns(
+def test_duplicate_gating_role_first_wins_and_warns(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    # Коллизия gating-роли (звание) — первая колонка побеждает + предупреждение.
+    with caplog.at_level(logging.WARNING):
+        rec = recognize(['Звание', 'Воинское_звание'], {})
+    assert rec.roles == {'rank': 'Звание'}
+    assert any('Воинское' in r.message for r in caplog.records)
+
+
+def test_duplicate_vestigial_role_first_wins_silently(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Коллизия вестигиальной роли (position) — первая побеждает, БЕЗ шума (T024:
+    # любая колонка склоняется generic, проигравшая роль всё равно отработает).
     with caplog.at_level(logging.WARNING):
         rec = recognize(['Должность', 'Позиция'], {})
     assert rec.roles == {'position': 'Должность'}
-    assert any('Позиция' in r.message for r in caplog.records)
+    assert not any('Позиция' in r.message for r in caplog.records)
 
 
 @pytest.mark.parametrize(

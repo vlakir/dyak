@@ -23,15 +23,15 @@ from dyak.columns import (
     KEY_SURNAME,
     NAME,
     PATRONYMIC,
-    POSITION,
     RANK,
     SURNAME,
+    is_literal_value,
     split_fullname,
 )
 from dyak.inflection import (
     Fio,
     NamePart,
-    Position,
+    Phrase,
     Rank,
     detect_gender,
     resolve_gender,
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from dyak.inflection import (
         GenderResolution,
         PetrovichInflector,
-        PymorphyInflector,
+        PhraseInflector,
         RankInflector,
     )
 
@@ -130,22 +130,30 @@ def _add_fio(
                 context[key] = parts[role]
 
 
-def _add_position(
+def _add_phrases(
     context: dict[str, object],
     person: Person,
-    roles: dict[str, str],
-    inflector: PymorphyInflector,
+    inflector: PhraseInflector,
     position_overrides: dict[str, CaseForms],
 ) -> None:
-    """Положить склоняемую должность (`Position`) под её колонку (если есть)."""
-    key = roles.get(POSITION)
-    if key is None:
-        return
-    text = person.cells.get(key, '')
-    if not text:
-        return
-    forms = position_overrides.get(normalize_lookup_key(text), {})
-    context[key] = Position(text, inflector, forms)
+    """
+    Обернуть каждую текстовую ячейку склоняемой `Phrase` (T024).
+
+    Модель «склонение по умолчанию»: склоняется ЛЮБАЯ колонка (должность,
+    подразделение, произвольный текст), а не только распознанная по роли.
+    Пропускаются ячейки, уже обёрнутые специализациями (ФИО → `NamePart`/`Fio`,
+    звание → `Rank`: их значение в контексте — не `str`), и литералы по форме
+    (коды/личные номера/даты — `is_literal_value`). Ручной `overrides.position`
+    по тексту фразы имеет приоритет над движком.
+    """
+    for key in person.cells:
+        if not isinstance(context.get(key), str):
+            continue  # уже обёрнуто ФИО/званием — не трогаем
+        text = str(context[key]).strip()
+        if not text or is_literal_value(text):
+            continue
+        forms = position_overrides.get(normalize_lookup_key(text), {})
+        context[key] = Phrase(text, inflector, forms)
 
 
 def _add_rank(
@@ -173,12 +181,12 @@ def build_context(
     roles: dict[str, str] | None = None,
     inflector: PetrovichInflector | None = None,
     gender_overrides: dict[str, Gender] | None = None,
-    position_inflector: PymorphyInflector | None = None,
+    position_inflector: PhraseInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
     rank_inflector: RankInflector | None = None,
     rank_overrides: dict[str, CaseForms] | None = None,
 ) -> dict[str, object]:
-    """Построить контекст; с движками — склоняемые ФИО/должность/звание."""
+    """Построить контекст; с движками — склоняемые ФИО/звание/любая фраза."""
     context: dict[str, object] = dict(person.cells)
     roles = roles or {}
 
@@ -196,10 +204,10 @@ def build_context(
             context, person, roles, fullname_source, inflector, gender_overrides or {}
         )
 
-    if position_inflector is not None:
-        _add_position(
-            context, person, roles, position_inflector, position_overrides or {}
-        )
+    # Звание — спец-ветка ДО generic-обёртки, чтобы её колонка стала `Rank` и
+    # не была перехвачена универсальным фраз-движком.
     if rank_inflector is not None:
         _add_rank(context, person, roles, rank_inflector, rank_overrides or {})
+    if position_inflector is not None:
+        _add_phrases(context, person, position_inflector, position_overrides or {})
     return context

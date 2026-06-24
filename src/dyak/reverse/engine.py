@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from dyak.config import CaseForms
     from dyak.domain import Gender, Person
-    from dyak.inflection import PetrovichInflector, PymorphyInflector, RankInflector
+    from dyak.inflection import PetrovichInflector, PhraseInflector, RankInflector
     from dyak.reverse.candidates import Candidate
     from dyak.reverse.matcher import Match
 
@@ -103,7 +103,7 @@ def build_template(
     roles: dict[str, str] | None = None,
     inflector: PetrovichInflector | None = None,
     gender_overrides: dict[str, Gender] | None = None,
-    position_inflector: PymorphyInflector | None = None,
+    position_inflector: PhraseInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
     rank_inflector: RankInflector | None = None,
     rank_overrides: dict[str, CaseForms] | None = None,
@@ -248,7 +248,7 @@ def _verify_roundtrip(
     roles: dict[str, str] | None,
     inflector: PetrovichInflector | None,
     gender_overrides: dict[str, Gender] | None,
-    position_inflector: PymorphyInflector | None,
+    position_inflector: PhraseInflector | None,
     position_overrides: dict[str, CaseForms] | None,
     rank_inflector: RankInflector | None,
     rank_overrides: dict[str, CaseForms] | None,
