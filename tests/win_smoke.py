@@ -77,10 +77,13 @@ def _force_utf8_output() -> None:
             reconfigure(encoding='utf-8', errors='replace')
 
 
+_ARGC = 2  # ровно команда + путь
+
+
 def main(argv: list[str]) -> int:
     """Диспетчер: `make <dir>` строит фикстуру, `check <dir>` проверяет вывод."""
     _force_utf8_output()
-    if len(argv) != 2:  # noqa: PLR2004 — ровно команда + путь
+    if len(argv) != _ARGC:
         sys.stderr.write('usage: win_smoke.py make|check <dir>\n')
         return 2
     command, raw_path = argv
