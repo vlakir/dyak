@@ -12,6 +12,7 @@ permissions:
 jobs:
   win-build:
     runs-on: windows-latest
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -63,16 +64,21 @@ jobs:
           # генерирует из фикстуры, а чек ассертит дательный падеж в документе.
           uv run python tests/win_smoke.py make _smoke
           New-Item -ItemType Directory -Force -Path _smoke/out | Out-Null
-          # Windowed-exe (console=False) НЕ блокирует шелл (`& exe` возвращается
-          # сразу) и без консоли пишет в невалидный stdout. Запускаем через
-          # Start-Process -Wait с явным редиректом потоков в файлы — так шелл
-          # ждёт завершения, а у ядра валидные дескрипторы потоков.
+          # Windowed-exe (console=False) без консоли пишет в невалидный stdout —
+          # редиректим потоки в файлы. Ждём завершения с ТАЙМАУТОМ (зависший
+          # процесс иначе держит job), потом дампим потоки — видно причину.
           $p = Start-Process -FilePath 'dist/dyak-portable.exe' `
             -ArgumentList 'generate','--table','_smoke/table.xlsx','--template','_smoke/template.docx','--out','_smoke/out' `
-            -Wait -PassThru -NoNewWindow `
+            -PassThru `
             -RedirectStandardOutput _smoke/out.log -RedirectStandardError _smoke/err.log
-          Write-Host "exe exit code: $($p.ExitCode)"
-          Get-Content _smoke/out.log, _smoke/err.log -ErrorAction SilentlyContinue
+          if ($p.WaitForExit(120000)) {
+            Write-Host "exe exit code: $($p.ExitCode)"
+          } else {
+            try { $p.Kill() } catch {}
+            Write-Host '::warning::exe не завершился за 120с — убит'
+          }
+          Write-Host '--- stdout ---'; Get-Content _smoke/out.log -ErrorAction SilentlyContinue
+          Write-Host '--- stderr ---'; Get-Content _smoke/err.log -ErrorAction SilentlyContinue
           uv run python tests/win_smoke.py check _smoke/out
           if ($LASTEXITCODE -ne 0) { Write-Error 'Windows smoke: склонение неверно — см. лог выше'; exit 1 }
 
