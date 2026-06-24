@@ -62,10 +62,17 @@ jobs:
           # русской Windows) ушёл в релиз. Здесь собранный (frozen) exe реально
           # генерирует из фикстуры, а чек ассертит дательный падеж в документе.
           uv run python tests/win_smoke.py make _smoke
-          # Все потоки → файл: windowed-exe без консоли иначе пишет в невалидный
-          # stdout. Файлы документов пишутся независимо от потоков.
-          & 'dist/dyak-portable.exe' generate --table _smoke/table.xlsx --template _smoke/template.docx --out _smoke/out *> _smoke/gen.log
-          Get-Content _smoke/gen.log -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path _smoke/out | Out-Null
+          # Windowed-exe (console=False) НЕ блокирует шелл (`& exe` возвращается
+          # сразу) и без консоли пишет в невалидный stdout. Запускаем через
+          # Start-Process -Wait с явным редиректом потоков в файлы — так шелл
+          # ждёт завершения, а у ядра валидные дескрипторы потоков.
+          $p = Start-Process -FilePath 'dist/dyak-portable.exe' `
+            -ArgumentList 'generate','--table','_smoke/table.xlsx','--template','_smoke/template.docx','--out','_smoke/out' `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput _smoke/out.log -RedirectStandardError _smoke/err.log
+          Write-Host "exe exit code: $($p.ExitCode)"
+          Get-Content _smoke/out.log, _smoke/err.log -ErrorAction SilentlyContinue
           uv run python tests/win_smoke.py check _smoke/out
           if ($LASTEXITCODE -ne 0) { Write-Error 'Windows smoke: склонение неверно — см. лог выше'; exit 1 }
 
