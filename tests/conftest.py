@@ -12,6 +12,15 @@ import os
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from dyak.render.engine import reset_tag_warnings
+
+
+@pytest.fixture(autouse=True)
+def _reset_tag_warnings():
+    # Дедуп предупреждений авто-фикса тегов живёт на процесс; чистим перед каждым
+    # тестом, чтобы порядок тестов не влиял на caplog-проверки (T026).
+    reset_tag_warnings()
+
 # Платформа Qt без дисплея — ставится до СОЗДАНИЯ QApplication (в фикстуре),
 # а не до импорта: плагин платформы грузится при инстанцировании, не при import.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

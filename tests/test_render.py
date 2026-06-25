@@ -16,6 +16,7 @@ from dyak.render.engine import (
     fix_jinja_spaces,
     render_document,
     render_filename,
+    reset_tag_warnings,
 )
 from dyak.render.filters import EMPTY_MARKER
 
@@ -76,6 +77,30 @@ def test_fix_jinja_spaces_leaves_filter_expr_untouched() -> None:
     assert fix_jinja_spaces('{{ ФИО | рд }}') == '{{ ФИО | рд }}'
     # Управляющий блок тоже не трогается.
     assert fix_jinja_spaces('{% for x in y %}') == '{% for x in y %}'
+
+
+def test_fix_jinja_spaces_normalizes_special_chars() -> None:
+    # T026 issue 1: спецсимволы в «голом» теге → `_` (как в ключе контекста).
+    assert fix_jinja_spaces('{{ л/н }}') == '{{ л_н }}'
+    assert fix_jinja_spaces('{{ № п/п }}') == '{{ п_п }}'
+    # Тег с атрибутом/вызовом не трогаем (символы значимы).
+    assert fix_jinja_spaces('{{ ФИО.инициалы }}') == '{{ ФИО.инициалы }}'
+    assert fix_jinja_spaces("{{ [a, b] | join('_') }}") == "{{ [a, b] | join('_') }}"
+
+
+def test_fix_jinja_spaces_warns_once_per_tag(caplog: pytest.LogCaptureFixture) -> None:
+    # T026: предупреждение авто-фикса — раз на уникальный тег за прогон (шаблон
+    # патчится построчно, иначе на N строк было бы N повторов).
+    reset_tag_warnings()
+    with caplog.at_level(logging.WARNING):
+        for _ in range(3):
+            fix_jinja_spaces('{{ л/н }}')
+    assert sum('л/н' in r.message for r in caplog.records) == 1
+    reset_tag_warnings()  # новый прогон — предупреждаем снова
+    with caplog.at_level(logging.WARNING):
+        fix_jinja_spaces('{{ л/н }}')
+    second_run = sum('л/н' in r.message for r in caplog.records)
+    assert second_run == 2  # первый прогон (1) + второй после reset (1)
 
 
 def test_default_filename_template_from_roles() -> None:
@@ -186,6 +211,22 @@ def test_render_filename_raises_on_undefined_variable() -> None:
         render_filename('{{ НетТакого }}.docx', {'Фамилия': 'Иванов'})
 
 
+def test_render_document_wraps_syntax_error_friendly(tmp_path: Path) -> None:
+    # T026 issue 3: грубая ошибка разметки → доменная TemplateError (понятный
+    # текст в лог), а не сырой jinja-TemplateSyntaxError (трейсбек во всплывашке).
+    template = tmp_path / 'tpl.docx'
+    doc = Document()
+    doc.add_paragraph('{{ Фамилия | }}')  # пустой фильтр — синтаксическая ошибка
+    doc.save(template)
+    with pytest.raises(TemplateError, match='разметке шаблона'):
+        render_document(template, {'Фамилия': 'Иванов'}, tmp_path / 'out.docx')
+
+
+def test_render_filename_wraps_syntax_error_friendly() -> None:
+    with pytest.raises(TemplateError, match='разметке шаблона'):
+        render_filename('{{ Фамилия | }}.docx', {'Фамилия': 'Иванов'})
+
+
 # --- T016 фаза C: empty-aware чистка пробелов и висячей пунктуации -------------
 
 
@@ -224,6 +265,22 @@ def test_legitimate_terminator_not_removed(tmp_path: Path) -> None:
     # Нет пустых подстановок — точка в конце предложения не трогается.
     text = _render_body(tmp_path, 'Иванов окончил институт.', {})
     assert text == 'Иванов окончил институт.'
+
+
+def test_intentional_spaces_preserved_without_empty(tmp_path: Path) -> None:
+    # T026 issue 4: намеренная последовательность пробелов (подпись) без пустых
+    # подстановок — НЕ трогается (программа не самодействует вне подстановок).
+    text = _render_body(tmp_path, 'Подпись:          И.И. Петров', {})
+    assert text == 'Подпись:          И.И. Петров'
+
+
+def test_intentional_spaces_preserved_with_empty_elsewhere(tmp_path: Path) -> None:
+    # Пустая подстановка чистит только СВОЙ дублированный пробел; намеренные
+    # пробелы в другом месте абзаца остаются нетронутыми.
+    text = _render_body(
+        tmp_path, '{{ Звание }} Иванов     —     директор', {'Звание': ''}
+    )
+    assert text == 'Иванов     —     директор'
 
 
 def test_empty_value_does_not_touch_dash(tmp_path: Path) -> None:
