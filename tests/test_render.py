@@ -16,6 +16,7 @@ from dyak.render.engine import (
     fix_jinja_spaces,
     render_document,
     render_filename,
+    reset_tag_warnings,
 )
 from dyak.render.filters import EMPTY_MARKER
 
@@ -85,6 +86,21 @@ def test_fix_jinja_spaces_normalizes_special_chars() -> None:
     # Тег с атрибутом/вызовом не трогаем (символы значимы).
     assert fix_jinja_spaces('{{ ФИО.инициалы }}') == '{{ ФИО.инициалы }}'
     assert fix_jinja_spaces("{{ [a, b] | join('_') }}") == "{{ [a, b] | join('_') }}"
+
+
+def test_fix_jinja_spaces_warns_once_per_tag(caplog: pytest.LogCaptureFixture) -> None:
+    # T026: предупреждение авто-фикса — раз на уникальный тег за прогон (шаблон
+    # патчится построчно, иначе на N строк было бы N повторов).
+    reset_tag_warnings()
+    with caplog.at_level(logging.WARNING):
+        for _ in range(3):
+            fix_jinja_spaces('{{ л/н }}')
+    assert sum('л/н' in r.message for r in caplog.records) == 1
+    reset_tag_warnings()  # новый прогон — предупреждаем снова
+    with caplog.at_level(logging.WARNING):
+        fix_jinja_spaces('{{ л/н }}')
+    second_run = sum('л/н' in r.message for r in caplog.records)
+    assert second_run == 2  # первый прогон (1) + второй после reset (1)
 
 
 def test_default_filename_template_from_roles() -> None:

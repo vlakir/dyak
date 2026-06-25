@@ -34,6 +34,7 @@ from dyak.render.engine import (
     default_filename_template,
     render_document,
     render_filename,
+    reset_tag_warnings,
 )
 from dyak.reverse import build_template
 from dyak.reverse import format_report as format_reverse_report
@@ -121,6 +122,7 @@ def generate_documents(
     progress_json: bool = False,
 ) -> list[Path]:
     """Сгенерировать по документу на строку таблицы. Вернуть пути файлов."""
+    reset_tag_warnings()  # предупреждения авто-фикса тегов — раз на тег за прогон
     cfg = load_config(config)
     data = read_table(table, cfg, sheet)
     out.mkdir(parents=True, exist_ok=True)
@@ -177,6 +179,7 @@ def reverse_template(
     row: int,
 ) -> ReverseReport:
     """Построить шаблон из образца и строки `row` (1-based); сохранить в `out`."""
+    reset_tag_warnings()
     cfg = load_config(config)
     data = read_table(table, cfg, sheet)
     total = len(data.people)

@@ -35,7 +35,7 @@ from dyak.inflection import (
     RankInflector,
 )
 from dyak.render.context import KEY_FULLNAME, build_context, resolve_row_gender
-from dyak.render.engine import render_to_document
+from dyak.render.engine import render_to_document, reset_tag_warnings
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -156,6 +156,7 @@ def check_table(
     rank_overrides: dict[str, CaseForms],
 ) -> CheckReport:
     """Сухой прогон: рендер каждой строки в память + сбор отчёта."""
+    reset_tag_warnings()  # предупреждения авто-фикса тегов — раз на тег за прогон
     inflector = PetrovichInflector()
     position_inflector = PhraseInflector()
     rank_inflector = RankInflector()

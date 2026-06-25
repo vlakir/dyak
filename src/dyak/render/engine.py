@@ -48,6 +48,16 @@ _DSL_CHARS = frozenset('|.()[]{}\'"')
 # убираем целиком; разделители (`, ;`) сохраняем.
 _TERMINATORS = frozenset('.!?…')
 
+# Уже предупреждённые авто-фиксом теги — чтобы не повторять одно и то же
+# предупреждение на каждый документ (шаблон патчится построчно). Сбрасывается
+# `reset_tag_warnings()` в начале каждого прогона (`generate`/`check`/`reverse`).
+_warned_tags: set[str] = set()
+
+
+def reset_tag_warnings() -> None:
+    """Сбросить дедуп предупреждений авто-фикса тегов (вызов в начале прогона)."""
+    _warned_tags.clear()
+
 
 def _is_plain_header_tag(content: str) -> bool:
     """Проверить, что тег — «голая» ссылка на заголовок (без фильтра/атрибута)."""
@@ -70,11 +80,14 @@ def fix_jinja_spaces(text: str) -> str:
         if _is_plain_header_tag(content):
             fixed = normalize_header(content)
             if fixed and fixed != content:
-                logger.warning(
-                    'Тег «{{ %s }}» нормализован в «{{ %s }}» (под заголовок колонки)',
-                    content,
-                    fixed,
-                )
+                if content not in _warned_tags:
+                    _warned_tags.add(content)  # предупреждаем раз на тег за прогон
+                    logger.warning(
+                        'Тег «{{ %s }}» нормализован в «{{ %s }}» (под заголовок '
+                        'колонки)',
+                        content,
+                        fixed,
+                    )
                 return '{{ ' + fixed + ' }}'
         return match.group(0)
 
