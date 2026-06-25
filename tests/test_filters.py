@@ -96,6 +96,16 @@ def test_bare_fio_renders_nominative(inflector: PetrovichInflector) -> None:
     assert env.from_string('{{ ФИО }}').render(ctx) == 'Иванов Пётр Семёнович'
 
 
+def test_explicit_nominative_filter(inflector: PetrovichInflector) -> None:
+    # T026 issue 2: явный фильтр `ип` = именительный (как тег без фильтра);
+    # `им` — тихий алиас для обратной совместимости.
+    env = build_jinja_env()
+    ctx = _ctx(inflector)
+    assert env.from_string('{{ Фамилия | ип }}').render(ctx) == 'Иванов'
+    assert env.from_string('{{ Фамилия | им }}').render(ctx) == 'Иванов'
+    assert env.from_string('{{ Должность | ип }}').render(ctx) == 'директор'
+
+
 def test_context_builds_fio_from_fullname_column(inflector: PetrovichInflector) -> None:
     person = Person(cells={'ФИО': 'Петрова Анна Сергеевна'})
     ctx = build_context(

@@ -21,6 +21,14 @@ def test_normalize_collapses_spaces() -> None:
     assert normalize_header('Фамилия') == 'Фамилия'
 
 
+def test_normalize_special_chars() -> None:
+    # Спецсимволы заголовка → `_` (T026): иначе Jinja ломается на `/`, `.` и т.п.
+    assert normalize_header('л/н') == 'л_н'
+    assert normalize_header('Ф.И.О.') == 'Ф_И_О'
+    assert normalize_header('№ п/п') == 'п_п'
+    assert normalize_header('Дата-приказа') == 'Дата_приказа'
+
+
 def test_recognizes_standard_roles() -> None:
     headers = ['Фамилия', 'Имя', 'Отчество', 'Должность', 'Дата_начала']
     rec = recognize(headers, {})
@@ -103,8 +111,10 @@ def test_fullname_column_recognized_and_split_source() -> None:
 
 
 def test_fullname_synonym_dotted() -> None:
-    rec = recognize(['Ф.И.О.'], {})
-    assert rec.fullname_source == 'Ф.И.О.'
+    # «Ф.И.О.» нормализуется в «Ф_И_О» (спецсимволы → `_`, T026); recognize
+    # получает уже нормализованный заголовок (как из read_table).
+    rec = recognize([normalize_header('Ф.И.О.')], {})
+    assert rec.fullname_source == 'Ф_И_О'
 
 
 def test_fullname_via_alias() -> None:

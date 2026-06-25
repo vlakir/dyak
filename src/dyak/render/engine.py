@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING
 import jinja2
 from docxtpl import DocxTemplate
 
-from dyak.errors import UndefinedVariableError
+from dyak.columns import normalize_header
+from dyak.errors import TemplateError, UndefinedVariableError
 from dyak.render.filters import EMPTY_MARKER, build_jinja_env
 
 if TYPE_CHECKING:
@@ -38,30 +39,43 @@ logger = logging.getLogger(__name__)
 
 # Тег вывода `{{ ... }}` (нежадно, через переводы строк).
 _OUTPUT_TAG = re.compile(r'\{\{(.*?)\}\}', re.DOTALL)
-# «Голый» многословный идентификатор: только буквы/цифры/`_` и пробелы.
-_BARE_MULTIWORD = re.compile(r'[^\W]+(?: +[^\W]+)+', re.UNICODE)
-_SPACES = re.compile(r' +')
+# Символы DSL/Jinja внутри тега: фильтр `|`, атрибут `.`, вызовы/индексация/
+# строки. Тег с любым из них — не «голая ссылка на заголовок», его не трогаем
+# (там символы значимы: `{{ ФИО | дт }}`, `{{ ФИО.инициалы }}`, фильтр имени файла).
+_DSL_CHARS = frozenset('|.()[]{}\'"')
 
-# Закрывающая пунктуация: перед ней одиночный пробел убирается (T016 фаза C).
-_CLOSING_PUNCT = frozenset('.,;:!?»)…')
 # Завершающая пунктуация: «висячую» (после пустого значения, в конце параграфа)
 # убираем целиком; разделители (`, ;`) сохраняем.
 _TERMINATORS = frozenset('.!?…')
 
 
+def _is_plain_header_tag(content: str) -> bool:
+    """Проверить, что тег — «голая» ссылка на заголовок (без фильтра/атрибута)."""
+    return bool(content) and not any(ch in _DSL_CHARS for ch in content)
+
+
 def fix_jinja_spaces(text: str) -> str:
-    """Починить пробелы в «голых» идентификаторах тегов `{{ … }}` + warning."""
+    """
+    Нормализовать «голые» теги-ссылки `{{ заголовок }}` под ключи контекста.
+
+    Пробелы и спецсимволы заголовка (`/`, `№`, `-` …) приводятся к `_` той же
+    `normalize_header`, что строит ключи контекста, — поэтому `{{ л/н }}` и
+    `{{ Дата начала }}` находят свои колонки (иначе Jinja разобрала бы `/` как
+    деление, а пробел как два слова). Теги с фильтром (`| дт`), атрибутом
+    (`.инициалы`) или вызовом/строкой — НЕ трогаем, там символы значимы.
+    """
 
     def repl(match: re.Match[str]) -> str:
-        trimmed = match.group(1).strip()
-        if _BARE_MULTIWORD.fullmatch(trimmed):
-            fixed = _SPACES.sub('_', trimmed)
-            logger.warning(
-                'Пробел в теге «{{ %s }}» — нормализую в «{{ %s }}»',
-                trimmed,
-                fixed,
-            )
-            return '{{ ' + fixed + ' }}'
+        content = match.group(1).strip()
+        if _is_plain_header_tag(content):
+            fixed = normalize_header(content)
+            if fixed and fixed != content:
+                logger.warning(
+                    'Тег «{{ %s }}» нормализован в «{{ %s }}» (под заголовок колонки)',
+                    content,
+                    fixed,
+                )
+                return '{{ ' + fixed + ' }}'
         return match.group(0)
 
     return _OUTPUT_TAG.sub(repl, text)
@@ -99,6 +113,12 @@ def render_filename(template: str, context: dict[str, object]) -> str:
     except jinja2.UndefinedError as exc:
         msg = f'Неизвестная переменная в шаблоне имени файла: {exc}'
         raise UndefinedVariableError(msg) from exc
+    except jinja2.TemplateError as exc:
+        msg = (
+            'Ошибка в разметке шаблона имени файла — проверьте теги «{{ … }}» '
+            f'и фильтры падежей («| дт» и т.п.): {exc}'
+        )
+        raise TemplateError(msg) from exc
     # Общий с телом docx env держит `autoescape=True` (обязателен для XML тела),
     # поэтому `&`/`'`/`<`/`>`/`"` в значении уезжают в `&amp;`/`&#39;`/… Для имени
     # файла HTML-экранирование не нужно — снимаем его обратным `html.unescape`
@@ -118,54 +138,50 @@ def iter_paragraphs(container: Document | _Cell) -> Iterator[Paragraph]:
                 yield from iter_paragraphs(cell)
 
 
-def _mark_empty_substitutions(text: str, keep: list[bool]) -> None:
-    """Снять маркеры пустых подстановок; убрать висячую хвостовую пунктуацию."""
+def _mark_empty_cleanup(text: str, keep: list[bool]) -> None:
+    """
+    Снять маркеры пустых подстановок и подчистить ТОЛЬКО соседние пробелы.
+
+    Область чистки — строго подстановки: убираем сам маркер, схлопываем
+    появившийся из-за пустого значения дублированный пробел и снимаем висячую
+    хвостовую пунктуацию. Любые ДРУГИЕ пробелы (намеренные, в подписи и т.п.)
+    остаются нетронутыми — программа не самодействует вне подстановок.
+    """
+    n = len(text)
     for i, char in enumerate(text):
         if char != EMPTY_MARKER:
             continue
         keep[i] = False  # сам маркер не выводим
-        # За пустым значением — пропускаем пробелы; если дальше завершающая
-        # пунктуация и до конца параграфа только пробелы, убираем и её
-        # («Звание: ▮.» → «Звание:»). Разделители (`, ;`) сохраняем.
+        left_space = i - 1 >= 0 and text[i - 1] == ' '
         j = i + 1
-        while j < len(text) and text[j] == ' ':
+        while j < n and text[j] == ' ':
             j += 1
-        if j < len(text) and text[j] in _TERMINATORS and text[j + 1 :].strip() == '':
+        right_space = j > i + 1  # за маркером были пробелы
+        # Висячая хвостовая пунктуация в конце параграфа («Звание: ▮.» → «Звание:»):
+        # убираем её, пробелы до неё и пробел перед маркером.
+        if j < n and text[j] in _TERMINATORS and text[j + 1 :].strip() == '':
             keep[j] = False
-
-
-def _mark_redundant_spaces(text: str, keep: list[bool]) -> None:
-    """Пометить к удалению лишние пробелы среди ещё живых символов."""
-    kept = [i for i in range(len(text)) if keep[i]]
-    chars = [text[i] for i in kept]
-    pos = 0
-    while pos < len(chars):
-        if chars[pos] != ' ':
-            pos += 1
-            continue
-        end = pos
-        while end < len(chars) and chars[end] == ' ':
-            end += 1
-        edge = pos == 0 or end == len(chars)
-        before_punct = end < len(chars) and chars[end] in _CLOSING_PUNCT
-        # На краях/перед пунктуацией убираем все пробелы пачки, иначе схлопываем
-        # до одного (со второго).
-        drop_from = pos if edge or before_punct else pos + 1
-        for local in range(drop_from, end):
-            keep[kept[local]] = False
-        pos = end
+            for k in range(i + 1, j):
+                keep[k] = False
+            if left_space:
+                keep[i - 1] = False
+        elif left_space and right_space:
+            keep[i + 1] = False  # «A ▮ C» → «A C» (один дублированный пробел)
+        elif right_space:
+            keep[i + 1] = False  # «▮ C» в начале → «C»
+        elif left_space:
+            keep[i - 1] = False  # «A ▮» в конце → «A»
 
 
 def _clean_paragraph(paragraph: Paragraph) -> None:
-    """Снять маркеры пустых подстановок и подчистить пробелы (через run'ы)."""
+    """Снять маркеры пустых подстановок и подчистить соседние пробелы (по run'ам)."""
     runs = paragraph.runs
     texts = [run.text for run in runs]
     full = ''.join(texts)
-    if EMPTY_MARKER not in full and '  ' not in full and full == full.strip():
-        return  # быстрый выход: ни маркеров, ни лишних пробелов
+    if EMPTY_MARKER not in full:
+        return  # нет пустых подстановок — текст не трогаем (намеренные пробелы целы)
     keep = [True] * len(full)
-    _mark_empty_substitutions(full, keep)
-    _mark_redundant_spaces(full, keep)
+    _mark_empty_cleanup(full, keep)
     pos = 0
     for run, text in zip(runs, texts, strict=True):
         end = pos + len(text)
@@ -190,6 +206,12 @@ def render_to_document(template_path: Path, context: dict[str, object]) -> Docum
     except jinja2.UndefinedError as exc:
         msg = f'Неизвестная переменная в шаблоне: {exc}'
         raise UndefinedVariableError(msg) from exc
+    except jinja2.TemplateError as exc:
+        msg = (
+            'Ошибка в разметке шаблона — проверьте теги «{{ … }}» и фильтры '
+            f'падежей («| дт» и т.п.): {exc}'
+        )
+        raise TemplateError(msg) from exc
     for paragraph in iter_paragraphs(template.docx):
         _clean_paragraph(paragraph)
     return template.docx
