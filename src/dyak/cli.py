@@ -96,6 +96,11 @@ def _gender_overrides(cfg: Config) -> dict[str, Gender]:
     return result
 
 
+def _decline_surnames(cfg: Config) -> set[str]:
+    """Нормализовать `decline_surnames` в множество ключей (обход правила T027)."""
+    return {normalize_lookup_key(surname) for surname in cfg.decline_surnames}
+
+
 def _position_overrides(cfg: Config) -> dict[str, CaseForms]:
     """Нормализовать `overrides.position` в `ключ должности → падежные формы`."""
     return {
@@ -138,6 +143,7 @@ def generate_documents(
     position_inflector = PhraseInflector()
     rank_inflector = RankInflector()
     gender_overrides = _gender_overrides(cfg)
+    decline_surnames = _decline_surnames(cfg)
     position_overrides = _position_overrides(cfg)
     rank_overrides = _rank_overrides(cfg)
     used: set[str] = set()
@@ -150,6 +156,7 @@ def generate_documents(
                 roles=data.roles,
                 inflector=inflector,
                 gender_overrides=gender_overrides,
+                decline_surnames=decline_surnames,
                 position_inflector=position_inflector,
                 position_overrides=position_overrides,
                 rank_inflector=rank_inflector,
@@ -193,6 +200,7 @@ def reverse_template(
         roles=data.roles,
         inflector=PetrovichInflector(),
         gender_overrides=_gender_overrides(cfg),
+        decline_surnames=_decline_surnames(cfg),
         position_inflector=PhraseInflector(),
         position_overrides=_position_overrides(cfg),
         rank_inflector=RankInflector(),
@@ -292,6 +300,7 @@ def check(
             data,
             template,
             gender_overrides=_gender_overrides(cfg),
+            decline_surnames=_decline_surnames(cfg),
             position_overrides=_position_overrides(cfg),
             rank_overrides=_rank_overrides(cfg),
         )

@@ -41,10 +41,15 @@ class NamePart:
     kind: NameKind
     gender: Gender
     inflector: PetrovichInflector
+    # Принудительно склонять фамилию-нарицательное (список `decline_surnames`
+    # конфига, T027); для имени/отчества не используется.
+    force_decline: bool = False
 
     def inflect(self, case: Case) -> str:
         """Вернуть часть в падеже `case` (пустая часть → пустая строка)."""
-        return self.inflector.inflect(self.text, self.kind, case, self.gender)
+        return self.inflector.inflect(
+            self.text, self.kind, case, self.gender, force_decline=self.force_decline
+        )
 
     def __str__(self) -> str:
         return self.text

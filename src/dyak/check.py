@@ -33,6 +33,7 @@ from dyak.inflection import (
     PhraseInflector,
     Rank,
     RankInflector,
+    is_known_surname,
 )
 from dyak.render.context import KEY_FULLNAME, build_context, resolve_row_gender
 from dyak.render.engine import render_to_document, reset_tag_warnings
@@ -94,6 +95,20 @@ def _declines(value: NamePart | Phrase | Rank) -> bool:
 _NOT_DECLINED_KIND = {Phrase: 'значение', Rank: 'звание'}
 
 
+def _surname_message(text: str) -> str:
+    """Сообщение `check` для несклонённой фамилии (T027: gated vs несклоняемая)."""
+    if is_known_surname(text):
+        # Опознана как фамилия, но не склоняется — настоящая несклоняемая
+        # (иностранная, на -о/-ко, ж. на согласный): всё верно, действий не нужно.
+        return f'фамилия «{text}» несклоняемая — оставлена в именительном (это норма)'
+    # Не опознана как фамилия (нарицательное: Бивень, Кузнец) — по умолчанию в
+    # именительном; если её всё-таки надо склонять, добавьте в `decline_surnames`.
+    return (
+        f'фамилия «{text}» не опознана как фамилия — оставлена в именительном; '
+        f'если её надо склонять, добавьте в `decline_surnames` конфига'
+    )
+
+
 def _check_declension(row: int, context: dict[str, object]) -> list[Issue]:
     """Найти склоняемые «листья» (ФИО/фраза/звание), которые не склоняются."""
     issues: list[Issue] = []
@@ -102,11 +117,14 @@ def _check_declension(row: int, context: dict[str, object]) -> list[Issue]:
             continue
         if not value.text or _declines(value):
             continue
-        kind = _NOT_DECLINED_KIND.get(type(value), 'часть ФИО')
-        message = (
-            f'не склоняется ({kind}): «{value.text}» — добавьте override, '
-            f'если это не иностранное/несклоняемое слово'
-        )
+        if isinstance(value, NamePart) and value.kind == 'surname':
+            message = _surname_message(value.text)
+        else:
+            kind = _NOT_DECLINED_KIND.get(type(value), 'часть ФИО')
+            message = (
+                f'не склоняется ({kind}): «{value.text}» — добавьте override, '
+                f'если это не иностранное/несклоняемое слово'
+            )
         issues.append(Issue(row, IssueKind.NOT_DECLINED, message))
     return issues
 
@@ -152,6 +170,7 @@ def check_table(
     template_path: Path,
     *,
     gender_overrides: dict[str, Gender],
+    decline_surnames: set[str] | None = None,
     position_overrides: dict[str, CaseForms],
     rank_overrides: dict[str, CaseForms],
 ) -> CheckReport:
@@ -169,6 +188,7 @@ def check_table(
             roles=table.roles,
             inflector=inflector,
             gender_overrides=gender_overrides,
+            decline_surnames=decline_surnames,
             position_inflector=position_inflector,
             position_overrides=position_overrides,
             rank_inflector=rank_inflector,

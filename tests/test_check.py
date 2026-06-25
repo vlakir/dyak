@@ -175,3 +175,37 @@ def test_report_format_lists_issues(tmp_path: Path, fatal_kind: IssueKind) -> No
     text = format_report(report)
     assert 'строка 1' in text
     assert fatal_kind in _kinds(report)
+
+
+def test_common_noun_surname_flagged_with_hint(tmp_path: Path) -> None:
+    # T027: фамилия-нарицательное оставлена в им. → отчёт с подсказкой про
+    # `decline_surnames` (а не общий «добавьте override»).
+    table = _table(_person('Бивень', 'Абрам', 'Моисеевич', 'директор'))
+    report = check_table(
+        table,
+        _template(tmp_path),
+        gender_overrides={},
+        position_overrides={},
+        rank_overrides={},
+    )
+    not_declined = [
+        i.message for i in report.issues if i.kind is IssueKind.NOT_DECLINED
+    ]
+    assert any('Бивень' in m and 'decline_surnames' in m for m in not_declined)
+
+
+def test_force_decline_suppresses_surname_flag(tmp_path: Path) -> None:
+    # С decline_surnames фамилия склоняется → не попадает в отчёт.
+    table = _table(_person('Бивень', 'Абрам', 'Моисеевич', 'директор'))
+    report = check_table(
+        table,
+        _template(tmp_path),
+        gender_overrides={},
+        decline_surnames={normalize_lookup_key('Бивень')},
+        position_overrides={},
+        rank_overrides={},
+    )
+    assert not [
+        i for i in report.issues
+        if i.kind is IssueKind.NOT_DECLINED and 'Бивень' in i.message
+    ]

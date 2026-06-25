@@ -12,7 +12,13 @@ from petrovich.enums import Gender as PGender
 from petrovich.main import DEFAULT_RULES_PATH, Petrovich
 
 from dyak.domain import Case, Gender
-from dyak.inflection import Fio, Initials, NamePart, PetrovichInflector
+from dyak.inflection import (
+    Fio,
+    Initials,
+    NamePart,
+    PetrovichInflector,
+    is_known_surname,
+)
 
 _FIXTURE = Path(__file__).parent / 'fixtures' / 'declension.csv'
 _CASES = [
@@ -126,6 +132,39 @@ def test_initials_decline_surname_in_oblique_case(inflector: PetrovichInflector)
     )
     assert fio.инициалы.inflect(Case.GENT) == 'Иванова П. С.'
     assert fio.инициалы_впереди.inflect(Case.DATV) == 'П. С. Иванову'
+
+
+# --- T027: фамилии-нарицательные не склоняются по умолчанию --------------------
+
+
+def test_is_known_surname_signal() -> None:
+    # Обычные фамилии — pymorphy знает их как фамилии (грамема Surn).
+    assert is_known_surname('Иванов')
+    assert is_known_surname('Соколов')
+    assert is_known_surname('БИВЕНЬ') is False  # нарицательное, не опознано
+    assert is_known_surname('Кузнец') is False
+
+
+def test_common_noun_surname_stays_nominative(inflector: PetrovichInflector) -> None:
+    # T027: фамилия-нарицательное (Бивень) по умолчанию НЕ склоняется.
+    part = NamePart('Бивень', 'surname', Gender.MALE, inflector)
+    assert part.inflect(Case.DATV) == 'Бивень'
+    assert part.inflect(Case.GENT) == 'Бивень'
+    # Обычная фамилия рядом — склоняется как обычно.
+    normal = NamePart('Иванов', 'surname', Gender.MALE, inflector)
+    assert normal.inflect(Case.DATV) == 'Иванову'
+
+
+def test_force_decline_overrides_rule(inflector: PetrovichInflector) -> None:
+    # Обход (список decline_surnames конфига): всё-таки склонять.
+    part = NamePart('Бивень', 'surname', Gender.MALE, inflector, force_decline=True)
+    assert part.inflect(Case.DATV) == 'Бивеню'
+
+
+def test_rule_applies_only_to_surnames(inflector: PetrovichInflector) -> None:
+    # Имя/отчество правилом не затронуты (склоняются по petrovich как раньше).
+    name = NamePart('Пётр', 'name', Gender.MALE, inflector)
+    assert name.inflect(Case.DATV) == 'Петру'
 
 
 def test_initials_without_patronymic(inflector: PetrovichInflector) -> None:
