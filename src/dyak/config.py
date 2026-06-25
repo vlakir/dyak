@@ -60,6 +60,10 @@ class Config(BaseModel):
     # Ручное указание пола для неоднозначных имён (T002): ФИО (как в таблице)
     # → `м`/`ж`/`male`/`female`. Перекрывает автоопределение по отчеству/имени.
     genders: dict[str, str] = Field(default_factory=dict)
+    # Фамилии-нарицательные, которые НАДО склонять (обход правила T027): по
+    # умолчанию фамилии, не опознанные pymorphy как фамилии (Бивень, Кузнец),
+    # остаются в именительном. Перечислите здесь те, что всё-таки склонять.
+    decline_surnames: list[str] = Field(default_factory=list)
 
 
 def load_config(path: Path | None) -> Config:

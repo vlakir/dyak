@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,7 @@ from petrovich.enums import Gender as PGender
 from petrovich.main import DEFAULT_RULES_PATH, Petrovich
 
 from dyak.domain import Case, Gender
+from dyak.inflection.morph import get_analyzer
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,6 +49,20 @@ _PETROVICH_GENDER: dict[Gender, str] = {
     Gender.MALE: PGender.MALE,
     Gender.FEMALE: PGender.FEMALE,
 }
+
+
+@functools.lru_cache(maxsize=4096)
+def is_known_surname(text: str) -> bool:
+    """
+    Опознаёт ли pymorphy слово как фамилию (грамема `Surn`).
+
+    Фамилии-нарицательные (Бивень, Кузнец, Заяц) грамемы `Surn` не имеют —
+    pymorphy знает их только как обычные слова. В официальных документах такие
+    фамилии не склоняют (T027): petrovich для них даёт спорные и порой неверные
+    формы (Кузн**ц**у, Пал**ц**у), а именительный всегда безопасен. Сигнал
+    точный — у обычных фамилий (Иванов, Соколов, …) `Surn` есть всегда.
+    """
+    return any('Surn' in parse.tag for parse in get_analyzer().parse(text))
 
 
 class _Utf8Petrovich(Petrovich):
@@ -74,11 +90,24 @@ class PetrovichInflector:
     def __init__(self) -> None:
         self._petrovich = _Utf8Petrovich()
 
-    def inflect(self, text: str, kind: NameKind, case: Case, gender: Gender) -> str:
+    def inflect(
+        self,
+        text: str,
+        kind: NameKind,
+        case: Case,
+        gender: Gender,
+        *,
+        force_decline: bool = False,
+    ) -> str:
         """Просклонять часть ФИО `kind` к падежу `case` для пола `gender`."""
         if not text:
             return ''
         if case is Case.NOMN:
+            return text
+        if kind == 'surname' and not force_decline and not is_known_surname(text):
+            # Фамилия-нарицательное (Бивень, Кузнец) — не опознана как фамилия;
+            # в официальных документах не склоняется (T027). `force_decline`
+            # (список `decline_surnames` конфига) переопределяет.
             return text
         method = self._method(kind)
         is_upper = text.isupper()

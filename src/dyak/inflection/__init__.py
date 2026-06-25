@@ -19,7 +19,7 @@ from dyak.inflection.gender import (
     parse_gender,
     resolve_gender,
 )
-from dyak.inflection.petrovich_fio import PetrovichInflector
+from dyak.inflection.petrovich_fio import PetrovichInflector, is_known_surname
 from dyak.inflection.phrase import Phrase, PhraseInflector
 from dyak.inflection.ports import Declinable
 from dyak.inflection.rank import Rank, RankInflector
@@ -37,6 +37,7 @@ __all__ = [
     'Rank',
     'RankInflector',
     'detect_gender',
+    'is_known_surname',
     'parse_gender',
     'resolve_gender',
 ]

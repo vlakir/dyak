@@ -102,6 +102,7 @@ def _add_fio(
     fullname_source: str | None,
     inflector: PetrovichInflector,
     gender_overrides: dict[str, Gender],
+    decline_surnames: set[str],
 ) -> None:
     """Положить склоняемые ФИО (`NamePart`/`Fio`) в контекст (если есть)."""
     surname_t, name_t, patronymic_t = _part_texts(person, roles, fullname_source)
@@ -110,9 +111,11 @@ def _add_fio(
 
     override = gender_overrides.get(_fullname_key(surname_t, name_t, patronymic_t))
     gender = detect_gender(name_t, patronymic_t, override=override)
+    # Принудительное склонение фамилии-нарицательного (обход правила T027).
+    force = normalize_lookup_key(surname_t) in decline_surnames
 
     parts = {
-        SURNAME: NamePart(surname_t, 'surname', gender, inflector),
+        SURNAME: NamePart(surname_t, 'surname', gender, inflector, force_decline=force),
         NAME: NamePart(name_t, 'name', gender, inflector),
         PATRONYMIC: NamePart(patronymic_t, 'patronymic', gender, inflector),
     }
@@ -181,6 +184,7 @@ def build_context(
     roles: dict[str, str] | None = None,
     inflector: PetrovichInflector | None = None,
     gender_overrides: dict[str, Gender] | None = None,
+    decline_surnames: set[str] | None = None,
     position_inflector: PhraseInflector | None = None,
     position_overrides: dict[str, CaseForms] | None = None,
     rank_inflector: RankInflector | None = None,
@@ -201,7 +205,13 @@ def build_context(
             context[KEY_PATRONYMIC] = patronymic_t
     else:
         _add_fio(
-            context, person, roles, fullname_source, inflector, gender_overrides or {}
+            context,
+            person,
+            roles,
+            fullname_source,
+            inflector,
+            gender_overrides or {},
+            decline_surnames or set(),
         )
 
     # Звание — спец-ветка ДО generic-обёртки, чтобы её колонка стала `Rank` и
