@@ -88,6 +88,20 @@ def test_fix_jinja_spaces_normalizes_special_chars() -> None:
     assert fix_jinja_spaces("{{ [a, b] | join('_') }}") == "{{ [a, b] | join('_') }}"
 
 
+def test_fix_jinja_spaces_normalizes_head_before_filter() -> None:
+    # T031: многословный заголовок с падежным фильтром — нормализуем только
+    # голову, цепочку фильтров сохраняем дословно.
+    assert fix_jinja_spaces('{{ Номер приказа | ип }}') == '{{ Номер_приказа | ип }}'
+    assert fix_jinja_spaces('{{ Дата начала | дт | upper }}') == (
+        '{{ Дата_начала | дт | upper }}'
+    )
+    # Голова — одно слово, нормализовать нечего: тег без изменений.
+    assert fix_jinja_spaces('{{ ФИО | рд }}') == '{{ ФИО | рд }}'
+    # Атрибут/вызов в голове по-прежнему не трогаем даже с фильтром.
+    assert fix_jinja_spaces('{{ ФИО.инициалы | рд }}') == '{{ ФИО.инициалы | рд }}'
+    assert fix_jinja_spaces('{{ ФИО | согл("м", "ж") }}') == '{{ ФИО | согл("м", "ж") }}'
+
+
 def test_fix_jinja_spaces_warns_once_per_tag(caplog: pytest.LogCaptureFixture) -> None:
     # T026: предупреждение авто-фикса — раз на уникальный тег за прогон (шаблон
     # патчится построчно, иначе на N строк было бы N повторов).

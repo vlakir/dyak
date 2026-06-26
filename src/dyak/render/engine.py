@@ -39,10 +39,12 @@ logger = logging.getLogger(__name__)
 
 # Тег вывода `{{ ... }}` (нежадно, через переводы строк).
 _OUTPUT_TAG = re.compile(r'\{\{(.*?)\}\}', re.DOTALL)
-# Символы DSL/Jinja внутри тега: фильтр `|`, атрибут `.`, вызовы/индексация/
-# строки. Тег с любым из них — не «голая ссылка на заголовок», его не трогаем
-# (там символы значимы: `{{ ФИО | дт }}`, `{{ ФИО.инициалы }}`, фильтр имени файла).
-_DSL_CHARS = frozenset('|.()[]{}\'"')
+# Символы DSL/Jinja, при которых ГОЛОВУ тега (часть до первого `|`) не трогаем:
+# атрибут `.инициалы`, вызов/индексация/строка. Фильтр `|` отделяется заранее
+# (`partition('|')`), поэтому самих фильтров здесь нет — голова с пробелами в
+# многословном заголовке нормализуется даже при наличии падежного фильтра
+# (`{{ Номер приказа | ип }}` → `{{ Номер_приказа | ип }}`).
+_HEAD_NOFIX_CHARS = frozenset('.()[]{}\'"')
 
 # Завершающая пунктуация: «висячую» (после пустого значения, в конце параграфа)
 # убираем целиком; разделители (`, ;`) сохраняем.
@@ -59,37 +61,44 @@ def reset_tag_warnings() -> None:
     _warned_tags.clear()
 
 
-def _is_plain_header_tag(content: str) -> bool:
-    """Проверить, что тег — «голая» ссылка на заголовок (без фильтра/атрибута)."""
-    return bool(content) and not any(ch in _DSL_CHARS for ch in content)
+def _is_plain_header_expr(head: str) -> bool:
+    """Голова тега (до `|`) — «голая» ссылка на заголовок, без атрибута/вызова."""
+    return bool(head) and not any(ch in _HEAD_NOFIX_CHARS for ch in head)
 
 
 def fix_jinja_spaces(text: str) -> str:
     """
-    Нормализовать «голые» теги-ссылки `{{ заголовок }}` под ключи контекста.
+    Нормализовать ссылку на заголовок в теге `{{ заголовок | фильтр }}`.
 
     Пробелы и спецсимволы заголовка (`/`, `№`, `-` …) приводятся к `_` той же
-    `normalize_header`, что строит ключи контекста, — поэтому `{{ л/н }}` и
-    `{{ Дата начала }}` находят свои колонки (иначе Jinja разобрала бы `/` как
-    деление, а пробел как два слова). Теги с фильтром (`| дт`), атрибутом
-    (`.инициалы`) или вызовом/строкой — НЕ трогаем, там символы значимы.
+    `normalize_header`, что строит ключи контекста, — поэтому `{{ л/н }}`,
+    `{{ Дата начала }}` и `{{ Номер приказа | ип }}` находят свои колонки
+    (иначе Jinja разобрала бы `/` как деление, а пробел как два слова).
+
+    Нормализуется только **голова** тега — часть до первого `|`; цепочка
+    фильтров (`| дт | upper`) сохраняется дословно. Голову не трогаем, если в
+    ней есть атрибут (`.инициалы`), вызов или строка (`[a, b] | join('_')`,
+    `согл("…", "…")`) — там символы значимы.
     """
 
     def repl(match: re.Match[str]) -> str:
-        content = match.group(1).strip()
-        if _is_plain_header_tag(content):
-            fixed = normalize_header(content)
-            if fixed and fixed != content:
-                if content not in _warned_tags:
-                    _warned_tags.add(content)  # предупреждаем раз на тег за прогон
-                    logger.warning(
-                        'Тег «{{ %s }}» нормализован в «{{ %s }}» (под заголовок '
-                        'колонки)',
-                        content,
-                        fixed,
-                    )
-                return '{{ ' + fixed + ' }}'
-        return match.group(0)
+        head, sep, rest = match.group(1).partition('|')
+        head_stripped = head.strip()
+        if not _is_plain_header_expr(head_stripped):
+            return match.group(0)
+        fixed = normalize_header(head_stripped)
+        if not fixed or fixed == head_stripped:
+            return match.group(0)
+        tail = f' | {rest.strip()}' if sep else ''
+        old_inner = match.group(1).strip()
+        if old_inner not in _warned_tags:
+            _warned_tags.add(old_inner)  # предупреждаем раз на тег за прогон
+            logger.warning(
+                'Тег «{{ %s }}» нормализован в «{{ %s }}» (под заголовок колонки)',
+                old_inner,
+                fixed + tail,
+            )
+        return '{{ ' + fixed + tail + ' }}'
 
     return _OUTPUT_TAG.sub(repl, text)
 

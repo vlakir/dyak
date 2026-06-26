@@ -193,3 +193,56 @@ def test_initials_is_declinable(inflector: PetrovichInflector) -> None:
     )
     assert isinstance(fio.инициалы, Initials)
     assert hasattr(fio.инициалы, 'inflect')
+
+
+# --- T031: отдельные инициалы имени/отчества/фамилии ---------------------------
+
+
+def test_single_initials(inflector: PetrovichInflector) -> None:
+    # Каждая часть → одна заглавная буква с точкой.
+    fio = _fio(
+        {'surname': 'Иванов', 'name': 'Пётр', 'patronymic': 'Семёнович', 'gender': 'male'},
+        inflector,
+    )
+    assert fio.фамилия_инициал == 'И.'
+    assert fio.имя_инициал == 'П.'
+    assert fio.отчество_инициал == 'С.'
+
+
+def test_single_initial_uppercase_for_lowercase_input(inflector: PetrovichInflector) -> None:
+    # Инициал всегда заглавный, даже если имя записано строчными.
+    fio = _fio(
+        {'surname': 'иванов', 'name': 'пётр', 'patronymic': 'семёнович', 'gender': 'male'},
+        inflector,
+    )
+    assert fio.имя_инициал == 'П.'
+    assert fio.отчество_инициал == 'С.'
+
+
+def test_patronymic_initial_empty_when_no_patronymic(inflector: PetrovichInflector) -> None:
+    # Нет отчества → пустая строка, без ошибки (можно ставить тег безусловно).
+    fio = _fio(
+        {'surname': 'Дюма', 'name': 'Александр', 'patronymic': '', 'gender': 'male'},
+        inflector,
+    )
+    assert fio.отчество_инициал == ''
+    assert fio.имя_инициал == 'А.'
+
+
+def test_single_initial_is_plain_string(inflector: PetrovichInflector) -> None:
+    # Одиночный инициал не склоняется — это строка, падежный фильтр пройдёт как есть.
+    fio = _fio(
+        {'surname': 'Иванов', 'name': 'Пётр', 'patronymic': 'Семёнович', 'gender': 'male'},
+        inflector,
+    )
+    assert isinstance(fio.имя_инициал, str)
+
+
+def test_unknown_attribute_still_raises(inflector: PetrovichInflector) -> None:
+    # Случайное имя по-прежнему AttributeError (важно для copy/pickle/dataclass).
+    fio = _fio(
+        {'surname': 'Иванов', 'name': 'Пётр', 'patronymic': 'Семёнович', 'gender': 'male'},
+        inflector,
+    )
+    with pytest.raises(AttributeError):
+        _ = fio.несуществующий_атрибут

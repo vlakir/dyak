@@ -32,6 +32,16 @@ _INITIALS_FORMS: dict[str, tuple[Literal['after', 'before'], bool]] = {
     'инициалы_слитно': ('after', True),  # Иванов П.С.
 }
 
+# Имя атрибута одиночного инициала в шаблоне → атрибут части `Fio`. Отдают
+# одну букву с точкой («П.»), чтобы кадровик собирал инициалы вручную там, где
+# готовые формы `_INITIALS_FORMS` не подходят (например имя и отчество в разных
+# местах документа). Одиночный инициал не склоняется — возвращаем строку.
+_SINGLE_INITIALS: dict[str, Literal['surname', 'name', 'patronymic']] = {
+    'фамилия_инициал': 'surname',  # И.
+    'имя_инициал': 'name',  # П.
+    'отчество_инициал': 'patronymic',  # С. (пустое отчество → пустая строка)
+}
+
 
 @dataclass(frozen=True, slots=True)
 class NamePart:
@@ -85,15 +95,21 @@ class Fio:
         """Пол ФИО (общий для всех частей) — нужен фильтру согласования `согл`."""
         return self.surname.gender
 
-    def __getattr__(self, name: str) -> Initials:
+    def __getattr__(self, name: str) -> Initials | str:
         """
         Доступ к инициалам по русским именам из шаблона (`{{ ФИО.инициалы }}`).
 
         Кириллические имена живут в DSL шаблона, а не в Python-коде:
         `инициалы` → «Иванов П. С.», `инициалы_впереди` → «П. С. Иванов»,
-        `инициалы_слитно` → «Иванов П.С.» (для имён файлов). Прочие имена —
-        обычный `AttributeError` (важно для dataclass/copy/pickle).
+        `инициалы_слитно` → «Иванов П.С.» (для имён файлов). Одиночные инициалы
+        (`имя_инициал` → «П.», `отчество_инициал` → «С.», `фамилия_инициал` →
+        «И.») отдают строку: пустое отчество → пустая строка (без ошибки).
+        Прочие имена — обычный `AttributeError` (важно для dataclass/copy/pickle).
         """
+        part_attr = _SINGLE_INITIALS.get(name)
+        if part_attr is not None:
+            text: str = getattr(self, part_attr).text
+            return f'{text[0].upper()}.' if text else ''
         spec = _INITIALS_FORMS.get(name)
         if spec is None:
             msg = f'{type(self).__name__!r} object has no attribute {name!r}'

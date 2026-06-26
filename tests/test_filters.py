@@ -90,6 +90,45 @@ def test_jinja_env_renders_initials(inflector: PetrovichInflector) -> None:
     assert tpl.render(ctx) == 'П. С. Иванов'
 
 
+def test_jinja_env_renders_single_initials(inflector: PetrovichInflector) -> None:
+    # T031: отдельные инициалы; падежный фильтр на одиночном инициале — как есть.
+    env = build_jinja_env()
+    ctx = _ctx(inflector)
+    tpl = env.from_string('{{ Фамилия }} {{ ФИО.имя_инициал }}{{ ФИО.отчество_инициал }}')
+    assert tpl.render(ctx) == 'Иванов П.С.'
+    assert env.from_string('{{ ФИО.имя_инициал | рд }}').render(ctx) == 'П.'
+
+
+def test_flat_initial_keys_in_context(inflector: PetrovichInflector) -> None:
+    # T031: инициалы доступны плоскими ключами наравне с Фамилия/Имя/Отчество.
+    ctx = _ctx(inflector)
+    assert ctx['Фамилия_инициал'] == 'И.'
+    assert ctx['Имя_инициал'] == 'П.'
+    assert ctx['Отчество_инициал'] == 'С.'
+    assert str(ctx['Инициалы']) == 'Иванов П. С.'
+    assert str(ctx['Инициалы_впереди']) == 'П. С. Иванов'
+    assert str(ctx['Инициалы_слитно']) == 'Иванов П.С.'
+
+
+def test_jinja_env_renders_flat_initials(inflector: PetrovichInflector) -> None:
+    # T031: плоские теги инициалов в шаблоне, включая склонение составных.
+    env = build_jinja_env()
+    ctx = _ctx(inflector)
+    assert env.from_string('{{ Имя_инициал }}{{ Отчество_инициал }}').render(ctx) == 'П.С.'
+    assert env.from_string('{{ Инициалы | рд }}').render(ctx) == 'Иванова П. С.'
+
+
+def test_flat_patronymic_initial_empty_when_absent(inflector: PetrovichInflector) -> None:
+    # Нет отчества → плоский Отчество_инициал пустой (тег можно ставить безусловно).
+    ctx = build_context(
+        Person(cells={'Фамилия': 'Дюма', 'Имя': 'Александр', 'Отчество': ''}),
+        roles={'surname': 'Фамилия', 'name': 'Имя', 'patronymic': 'Отчество'},
+        inflector=inflector,
+    )
+    assert ctx['Отчество_инициал'] == ''
+    assert ctx['Имя_инициал'] == 'А.'
+
+
 def test_bare_fio_renders_nominative(inflector: PetrovichInflector) -> None:
     env = build_jinja_env()
     ctx = _ctx(inflector)
