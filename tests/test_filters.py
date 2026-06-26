@@ -118,6 +118,23 @@ def test_jinja_env_renders_flat_initials(inflector: PetrovichInflector) -> None:
     assert env.from_string('{{ Инициалы | рд }}').render(ctx) == 'Иванова П. С.'
 
 
+def test_uppercase_to_title_after_case_filter(inflector: PetrovichInflector) -> None:
+    # T032 (документация): КАПС → обычное написание встроенным `title`, ПОСЛЕ
+    # падежа. Регрессия — фиксируем поддержанную цепочку `| падеж | title`.
+    env = build_jinja_env()
+    ctx = build_context(
+        Person(cells={'Фамилия': 'ИВАНОВ', 'Имя': 'ПЁТР', 'Отчество': 'СЕМЁНОВИЧ'}),
+        roles={'surname': 'Фамилия', 'name': 'Имя', 'patronymic': 'Отчество'},
+        inflector=inflector,
+    )
+    assert env.from_string('{{ Фамилия | дт | title }}').render(ctx) == 'Иванову'
+    assert env.from_string('{{ ФИО | рд | title }}').render(ctx) == (
+        'Иванова Петра Семёновича'
+    )
+    # Порядок наоборот ломает склонение — `title` снимает склоняемость.
+    assert env.from_string('{{ Фамилия | title | дт }}').render(ctx) == 'Иванов'
+
+
 def test_flat_patronymic_initial_empty_when_absent(inflector: PetrovichInflector) -> None:
     # Нет отчества → плоский Отчество_инициал пустой (тег можно ставить безусловно).
     ctx = build_context(
