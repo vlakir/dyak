@@ -101,29 +101,16 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._build_help_tab(), 'Справка')
         root.addWidget(self._tabs)
 
-        self._progress = QProgressBar()
-        self._progress.setVisible(False)
-        root.addWidget(self._progress)
-
-        self._status = QLabel('Готов к работе.')
-        root.addWidget(self._status)
-
-        self._log = QPlainTextEdit()
-        self._log.setReadOnly(True)
-        self._log.setFont(QFont('monospace'))
-        self._log.setMinimumHeight(160)
-        root.addWidget(self._log)
-
-        self._cancel_button = QPushButton('Отмена')
-        self._cancel_button.setEnabled(False)
-        self._cancel_button.clicked.connect(self._cancel)
-        root.addWidget(self._cancel_button)
-
     # --- построение вкладок ------------------------------------------------
 
     def _build_generate_tab(self) -> QWidget:
+        # Прогресс/статус/лог/«Отмена» живут ВНУТРИ вкладки «Генерация», а не в
+        # общем layout под вкладками — иначе они висели бы и на «Справке».
         tab = QWidget()
-        form = QFormLayout(tab)
+        layout = QVBoxLayout(tab)
+
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
         self._gen_table = _PathRow('open', 'Выберите таблицу', _XLSX)
         self._gen_template = _PathRow('open', 'Выберите шаблон', _DOCX)
         self._gen_out = _PathRow('dir', 'Папка для результатов')
@@ -131,6 +118,26 @@ class MainWindow(QMainWindow):
         form.addRow('Шаблон (.docx):', self._gen_template)
         form.addRow('Папка результата:', self._gen_out)
         form.addRow('', self._make_run_button('Сгенерировать', self._run_generate))
+        layout.addWidget(form_widget)
+
+        self._progress = QProgressBar()
+        self._progress.setVisible(False)
+        layout.addWidget(self._progress)
+
+        self._status = QLabel('Готов к работе.')
+        layout.addWidget(self._status)
+
+        self._log = QPlainTextEdit()
+        self._log.setReadOnly(True)
+        self._log.setFont(QFont('monospace'))
+        self._log.setMinimumHeight(160)
+        layout.addWidget(self._log)
+
+        self._cancel_button = QPushButton('Отмена')
+        self._cancel_button.setEnabled(False)
+        self._cancel_button.clicked.connect(self._cancel)
+        layout.addWidget(self._cancel_button)
+
         return tab
 
     def _build_help_tab(self) -> QWidget:
