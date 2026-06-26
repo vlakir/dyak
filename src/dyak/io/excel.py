@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 from openpyxl import load_workbook
 
-from dyak.columns import normalize_header, recognize
+from dyak.columns import NAME, PATRONYMIC, SURNAME, normalize_header, recognize
 from dyak.domain import Person, Table
 from dyak.errors import TableError
 
@@ -50,6 +50,45 @@ def _to_str(value: object) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value)
+
+
+def _person_has_name(
+    cells: dict[str, str], roles: dict[str, str], fullname_source: str | None
+) -> bool:
+    """Есть ли в строке хоть какая-то часть ФИО (иначе строка — пустой человек)."""
+    if fullname_source is not None:
+        return bool(cells.get(fullname_source, '').strip())
+    return any(
+        cells.get(roles.get(role, ''), '').strip()
+        for role in (SURNAME, NAME, PATRONYMIC)
+    )
+
+
+def _drop_nameless_rows(
+    people: list[Person], roles: dict[str, str], fullname_source: str | None
+) -> list[Person]:
+    """
+    Отсеять строки без ФИО, если таблица ФИО-ориентированная (T029).
+
+    Частая штатная ситуация — пред-пронумерованные пустые строки («№ п/п» есть,
+    остального нет): по ним нечего генерировать (ФИО — основа кадрового
+    документа), а имя файла по умолчанию (`{{ Фамилия … }}`) на них падало.
+    Если колонок ФИО нет вовсе (генерация по другому ключу) — строки не трогаем.
+    """
+    has_fio = fullname_source is not None or any(
+        role in roles for role in (SURNAME, NAME, PATRONYMIC)
+    )
+    if not has_fio:
+        return people
+    kept = [p for p in people if _person_has_name(p.cells, roles, fullname_source)]
+    dropped = len(people) - len(kept)
+    if dropped:
+        logger.warning(
+            'Пропущено строк без ФИО: %d — документы по ним не формируются '
+            '(пустые/пред-пронумерованные строки)',
+            dropped,
+        )
+    return kept
 
 
 def _select_sheet(wb: Workbook, sheet: str | None) -> Worksheet:
@@ -143,6 +182,7 @@ def _read_rows(ws: Worksheet, config: Config) -> Table:
         )
 
     recognition = recognize([key for _, key in columns], config.aliases, samples)
+    people = _drop_nameless_rows(people, recognition.roles, recognition.fullname_source)
     return Table(
         roles=recognition.roles,
         fullname_source=recognition.fullname_source,

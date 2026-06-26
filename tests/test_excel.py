@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -167,3 +168,32 @@ def test_sheet_selected_by_name(tmp_path: Path) -> None:
     table = read_table(path, Config(), sheet='Сотрудники')
     assert len(table.people) == 2
     assert table.people[0].cells['Фамилия'] == 'Иванов'
+
+
+def test_drops_prenumbered_nameless_rows(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # T029: строки с одним «№ п/п» без ФИО (пред-пронумерованные болванки) —
+    # отсеиваются с предупреждением, не падают на имени файла.
+    headers = ['№ п/п', 'Фамилия', 'Имя', 'Отчество']
+    rows = [
+        ['1', 'Иванов', 'Пётр', 'Семёнович'],
+        ['2', 'Петрова', 'Анна', ''],  # без отчества — это валидный человек
+        ['3', '', '', ''],  # пустая болванка (только номер)
+        ['4', '', '', ''],
+    ]
+    xlsx = _make_xlsx(tmp_path / 't.xlsx', headers, rows)
+    with caplog.at_level(logging.WARNING):
+        table = read_table(xlsx, Config())
+    surnames = [p.cells['Фамилия'] for p in table.people]
+    assert surnames == ['Иванов', 'Петрова']  # болванки 3,4 отсеяны
+    assert any('без ФИО' in r.message for r in caplog.records)
+
+
+def test_keeps_nameless_rows_without_fio_columns(tmp_path: Path) -> None:
+    # Нет колонок ФИО (генерация по другому ключу) — строки НЕ отсеиваем.
+    headers = ['Номер', 'Примечание']
+    rows = [['1', 'первое'], ['2', '']]
+    xlsx = _make_xlsx(tmp_path / 't.xlsx', headers, rows)
+    table = read_table(xlsx, Config())
+    assert len(table.people) == 2  # обе строки сохранены (ordinal-режим)
