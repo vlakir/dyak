@@ -84,6 +84,16 @@ def test_window_has_expected_tabs(window):
     assert titles == ["Генерация", "Справка"]
 
 
+def test_log_lives_only_in_generate_tab(window):
+    # T030: лог/прогресс/«Отмена» — внутри вкладки «Генерация», на «Справке» их
+    # нет (справка занимает всю область вкладки).
+    generate_tab = window._tabs.widget(0)
+    help_tab = window._tabs.widget(1)
+    assert generate_tab.isAncestorOf(window._log)
+    assert generate_tab.isAncestorOf(window._cancel_button)
+    assert not help_tab.isAncestorOf(window._log)
+
+
 def test_require_blocks_empty(window):
     assert window._require("", "таблицу") is False
     assert "таблицу" in window._status.text()
