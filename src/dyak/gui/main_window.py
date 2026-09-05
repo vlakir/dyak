@@ -257,12 +257,27 @@ class MainWindow(QMainWindow):
         report = result.stdout.strip()
         if report:
             self._log.appendPlainText(report)
-        self._status.setText(
-            result.message if result.ok else f'Ошибка: {result.message}'
-        )
+        self._status.setText(self._status_text(result))
         self._progress.setVisible(False)
         self._set_running(running=False)
         self._proc = None
+
+    @staticmethod
+    def _status_text(result: runner.CommandResult) -> str:
+        """
+        Итог прогона для статусной строки, без сдвоенного «Ошибка: Ошибка:».
+
+        `runner.extract_message` отдаёт строку из stderr КАК ЕСТЬ, а ядро уже
+        печатает свои ошибки с префиксом «Ошибка: » — приписывать второй не
+        надо. Но в stderr такой строки может и не быть (упал по коду возврата,
+        не сказав ничего внятного) — тогда итог вида «Процесс завершился с
+        кодом 2» без префикса не читается как отказ, и заголовок нужен.
+        """
+        if result.ok:
+            return result.message
+        if result.message.startswith('Ошибка:'):
+            return result.message
+        return f'Ошибка: {result.message}'
 
     def _cancel(self) -> None:
         if self._proc is None:
