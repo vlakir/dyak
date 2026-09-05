@@ -158,6 +158,26 @@ def test_on_finished_error(window):
     assert window._status.text().startswith("Ошибка:")
 
 
+def test_on_finished_error_does_not_double_prefix(window):
+    # Ядро печатает свои ошибки уже с «Ошибка: », окно приписывало второй
+    # префикс — в статусе выходило «Ошибка: Ошибка: …» (T034).
+    window._stdout = ""
+    window._stderr = "Ошибка: нет колонки\n"
+    window._on_finished(1, None)
+    assert window._status.text() == "Ошибка: нет колонки"
+    assert "Ошибка: Ошибка:" not in window._status.text()
+
+
+def test_on_finished_error_without_message_gets_prefix(window):
+    # Обратный случай: ядро упало, ничего внятного не сказав. Тогда итог
+    # приходит без префикса, и заголовок нужен — иначе «Процесс завершился
+    # с кодом 2» не читается как отказ.
+    window._stdout = ""
+    window._stderr = ""
+    window._on_finished(2, None)
+    assert window._status.text() == "Ошибка: Процесс завершился с кодом 2"
+
+
 def test_cancel_without_process_is_safe(window):
     window._cancel()  # не должно падать
     assert window._proc is None
