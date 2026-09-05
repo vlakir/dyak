@@ -114,6 +114,33 @@ def test_run_generate_builds_argv(window, monkeypatch):
     assert "--progress-json" in argv
 
 
+def test_run_generate_passes_config_when_filled(window, monkeypatch):
+    # Без проброса ядро ищет dyak.yaml в рабочей папке процесса, которая к
+    # таблице пользователя отношения не имеет, — и ручные формы склонения
+    # (overrides) молча не применяются (T035).
+    captured = {}
+    monkeypatch.setattr(window, "_start", lambda argv: captured.update(argv=argv))
+    window._gen_table.edit.setText("t.xlsx")
+    window._gen_template.edit.setText("tpl.docx")
+    window._gen_out.edit.setText("out")
+    window._gen_config.edit.setText("/home/user/dyak.yaml")
+    window._run_generate()
+    argv = captured["argv"]
+    assert argv[argv.index("--config") + 1] == "/home/user/dyak.yaml"
+
+
+def test_run_generate_without_config_omits_flag(window, monkeypatch):
+    # Поле необязательное: пустое — флага нет вовсе, ядро берёт свой умолчательный
+    # путь, как и раньше.
+    captured = {}
+    monkeypatch.setattr(window, "_start", lambda argv: captured.update(argv=argv))
+    window._gen_table.edit.setText("t.xlsx")
+    window._gen_template.edit.setText("tpl.docx")
+    window._gen_out.edit.setText("out")
+    window._run_generate()
+    assert "--config" not in captured["argv"]
+
+
 def test_run_generate_requires_fields(window, monkeypatch):
     called = False
 

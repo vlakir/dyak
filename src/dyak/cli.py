@@ -23,6 +23,7 @@ from chancellery import (
     ChancelleryError,
     check_table,
     decline_surnames,
+    fio_overrides,
     format_check_report,
     format_reverse_report,
     gender_overrides,
@@ -164,6 +165,7 @@ def check(
             template,
             gender_overrides=gender_overrides(cfg),
             decline_surnames=decline_surnames(cfg),
+            fio_overrides=fio_overrides(cfg),
             position_overrides=position_overrides(cfg),
             rank_overrides=rank_overrides(cfg),
         )
