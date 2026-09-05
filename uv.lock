@@ -75,7 +75,7 @@ wheels = [
 
 [[package]]
 name = "chancellery"
-version = "0.1.0"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docxtpl" },
@@ -88,9 +88,9 @@ dependencies = [
     { name = "python-docx" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/fc/27778b90f0dd6f3b064a25fe0aa0dbefb4d7e1d76bae457cdf0d3839bcca/chancellery-0.1.0.tar.gz", hash = "sha256:2fcb07d5224d4bc90e6c189518bb7f3777ee421b36ed706f6762a7c15551aec5", size = 187494, upload-time = "2026-09-05T10:46:26.227Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/67/64/30399ec44195c4a8cabcea139f1e698de98112e04ee3d8ba18b8938b8635/chancellery-0.2.0.tar.gz", hash = "sha256:797542eeb0db87ebee9bdd1fd0294bbb23d04420dccbee3198eff2545c0b7c0b", size = 192042, upload-time = "2026-09-05T11:50:44.356Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/2e/c02b4c98a3c61bb356bdf82d7bed13be9c251eb4e75070dbe23e342ef2dc/chancellery-0.1.0-py3-none-any.whl", hash = "sha256:af2c8b997d3b03b1f14154dafabf96aacb34f21c723c9e85f0556aa5312f63ea", size = 73244, upload-time = "2026-09-05T10:46:27.708Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/78/71cd8cd57dfca43f398b8027c389d73722d457f53dbf3a0d72529feaec38/chancellery-0.2.0-py3-none-any.whl", hash = "sha256:422718a89f193076b9b0b7d86376fa34db77c9dc18fee4f50bac3acb1fb79b94", size = 75397, upload-time = "2026-09-05T11:50:42.954Z" },
 ]
 
 [[package]]
@@ -191,7 +191,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chancellery", specifier = ">=0.1.0,<0.2.0" },
+    { name = "chancellery", specifier = ">=0.2.0,<0.3.0" },
     { name = "pyside6-essentials", specifier = ">=6.11.1" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "typer", specifier = ">=0.26.7" },

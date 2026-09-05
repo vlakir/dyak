@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
 _DOCX = 'Документ Word (*.docx)'
 _XLSX = 'Таблица Excel (*.xlsx)'
+_YAML = 'Настройки Дьяка (*.yaml *.yml)'
 
 
 class _PathRow(QWidget):
@@ -114,9 +115,15 @@ class MainWindow(QMainWindow):
         self._gen_table = _PathRow('open', 'Выберите таблицу', _XLSX)
         self._gen_template = _PathRow('open', 'Выберите шаблон', _DOCX)
         self._gen_out = _PathRow('dir', 'Папка для результатов')
+        # Конфиг необязателен, поэтому идёт последним и подписан явно: без него
+        # всё работает, а ручные формы склонения (overrides) без него ядру
+        # взять неоткуда — оно ищет `dyak.yaml` в рабочей папке процесса,
+        # которая у запущенного окна к таблице пользователя отношения не имеет.
+        self._gen_config = _PathRow('open', 'Выберите файл настроек', _YAML)
         form.addRow('Таблица (.xlsx):', self._gen_table)
         form.addRow('Шаблон (.docx):', self._gen_template)
         form.addRow('Папка результата:', self._gen_out)
+        form.addRow('Настройки (необязательно):', self._gen_config)
         form.addRow('', self._make_run_button('Сгенерировать', self._run_generate))
         layout.addWidget(form_widget)
 
@@ -166,6 +173,7 @@ class MainWindow(QMainWindow):
             self._gen_table.value(),
             self._gen_template.value(),
             self._gen_out.value(),
+            config=self._gen_config.value() or None,
         )
         self._start(argv)
 
