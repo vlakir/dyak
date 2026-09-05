@@ -7,16 +7,16 @@ authors = [
     {name = "Vladimir Kirievskiy", email = "vlakir73@yandex.ru"},
 ]
 requires-python = ">=3.14"
+# Движок (склонение, рендер, чтение таблицы, обратная сборка) уехал в
+# `chancellery` (T033); docxtpl, openpyxl, petrovich, pydantic, pymorphy3,
+# python-docx и pyyaml приходят транзитивно через неё и здесь не
+# объявляются — «Дьяк» ими напрямую не пользуется.
 dependencies = [
-    "docxtpl>=0.20.2",
-    "openpyxl>=3.1.5",
-    "petrovich>=2.0.1",
-    "pydantic>=2",
-    "pymorphy3>=2.0.6",
-    "pymorphy3-dicts-ru>=2.4.417150.4580142",
+    # Верхняя граница обязательна: `chancellery` живёт в 0.x и обратной
+    # совместимости публичного API не обещает — ломающие правки пойдут
+    # в 0.2.0. Границу поднимаем осознанно, по списку изменений от автора.
+    "chancellery>=0.1.0,<0.2.0",
     "pyside6-essentials>=6.11.1",
-    "python-docx>=1.2.0",
-    "pyyaml>=6.0.3",
     "rich>=15.0.0",
     "typer>=0.26.7",
 ]
@@ -27,6 +27,9 @@ dev = [
     "pytest>=8.4",
     "pytest-cov>=7.0",
     "pytest-asyncio>=1.0",
+    # Тесты строят входные xlsx и читают порождённые docx напрямую.
+    "openpyxl>=3.1.5",
+    "python-docx>=1.2.0",
 ]
 # Инструменты сборки Windows-бинарников (T010). Ставятся отдельно
 # (`uv sync --group build`), не тянутся в обычный sync / тесты.
@@ -65,6 +68,14 @@ ignore = [
 ]
 fixable = ["ALL"]
 unfixable = []
+
+
+[tool.ruff.lint.per-file-ignores]
+# Вспомогательные скрипты — не библиотечный код: `scripts/snapshot_examples.py`
+# по назначению печатает отчёт человеку (T201) и запускает CLI «Дьяка»
+# подпроцессом (S603, вызов списком аргументов, без shell). Решение
+# Разработчика в T033.
+"scripts/*" = ["T201", "S603"]
 
 
 [tool.ruff.lint.flake8-quotes]
