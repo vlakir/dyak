@@ -74,6 +74,26 @@ wheels = [
 ]
 
 [[package]]
+name = "chancellery"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "docxtpl" },
+    { name = "jinja2" },
+    { name = "openpyxl" },
+    { name = "petrovich" },
+    { name = "pydantic" },
+    { name = "pymorphy3" },
+    { name = "pymorphy3-dicts-ru" },
+    { name = "python-docx" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bc/fc/27778b90f0dd6f3b064a25fe0aa0dbefb4d7e1d76bae457cdf0d3839bcca/chancellery-0.1.0.tar.gz", hash = "sha256:2fcb07d5224d4bc90e6c189518bb7f3777ee421b36ed706f6762a7c15551aec5", size = 187494, upload-time = "2026-09-05T10:46:26.227Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/2e/c02b4c98a3c61bb356bdf82d7bed13be9c251eb4e75070dbe23e342ef2dc/chancellery-0.1.0-py3-none-any.whl", hash = "sha256:af2c8b997d3b03b1f14154dafabf96aacb34f21c723c9e85f0556aa5312f63ea", size = 73244, upload-time = "2026-09-05T10:46:27.708Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -149,15 +169,8 @@ name = "dyak"
 version = "0.3.3"
 source = { virtual = "." }
 dependencies = [
-    { name = "docxtpl" },
-    { name = "openpyxl" },
-    { name = "petrovich" },
-    { name = "pydantic" },
-    { name = "pymorphy3" },
-    { name = "pymorphy3-dicts-ru" },
+    { name = "chancellery" },
     { name = "pyside6-essentials" },
-    { name = "python-docx" },
-    { name = "pyyaml" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -168,23 +181,18 @@ build = [
 ]
 dev = [
     { name = "mypy" },
+    { name = "openpyxl" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "python-docx" },
     { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "docxtpl", specifier = ">=0.20.2" },
-    { name = "openpyxl", specifier = ">=3.1.5" },
-    { name = "petrovich", specifier = ">=2.0.1" },
-    { name = "pydantic", specifier = ">=2" },
-    { name = "pymorphy3", specifier = ">=2.0.6" },
-    { name = "pymorphy3-dicts-ru", specifier = ">=2.4.417150.4580142" },
+    { name = "chancellery", specifier = ">=0.1.0,<0.2.0" },
     { name = "pyside6-essentials", specifier = ">=6.11.1" },
-    { name = "python-docx", specifier = ">=1.2.0" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "typer", specifier = ">=0.26.7" },
 ]
@@ -193,9 +201,11 @@ requires-dist = [
 build = [{ name = "pyinstaller", specifier = ">=6.21" }]
 dev = [
     { name = "mypy", specifier = ">=1.17.1" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pytest", specifier = ">=8.4" },
     { name = "pytest-asyncio", specifier = ">=1.0" },
     { name = "pytest-cov", specifier = ">=7.0" },
+    { name = "python-docx", specifier = ">=1.2.0" },
     { name = "ruff", specifier = ">=0.12.10" },
 ]
 

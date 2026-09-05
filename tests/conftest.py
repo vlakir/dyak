@@ -12,7 +12,7 @@ import os
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from dyak.render.engine import reset_tag_warnings
+from chancellery import reset_tag_warnings
 
 
 @pytest.fixture(autouse=True)

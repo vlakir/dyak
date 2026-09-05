@@ -4,6 +4,10 @@ CLI dyak (typer): команды `generate`, `check`, `init`, `reverse`.
 `generate` (T006) — подстановка по заголовкам колонок; `check` (T004) —
 сухой прогон с отчётом; `init` (T005) — стартовый scaffold-набор;
 `reverse` (T007) — обратная генерация шаблона из готового документа.
+
+Сам движок — склонение, рендер, чтение таблицы, обратная сборка — живёт
+в библиотеке `chancellery` (T033). Здесь остаётся лицо приложения:
+разбор аргументов, прогресс-бар, экспорт в PDF и scaffold.
 """
 
 from __future__ import annotations
@@ -12,38 +16,28 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 import typer
-
-from dyak.check import check_table, format_report
-from dyak.config import Config, load_config
-from dyak.errors import DyakError, ReverseError
-from dyak.inflection import (
-    PetrovichInflector,
-    PhraseInflector,
-    RankInflector,
-    parse_gender,
+from chancellery import (
+    ChancelleryError,
+    check_table,
+    decline_surnames,
+    format_check_report,
+    format_reverse_report,
+    gender_overrides,
+    generate_documents,
+    load_config,
+    position_overrides,
+    rank_overrides,
+    read_table,
+    reverse_template,
 )
-from dyak.io.excel import read_table
-from dyak.io.naming import unique_filename
+
+from dyak.errors import DyakError
 from dyak.pdf import export_to_pdf
 from dyak.progress import GenerateProgress
-from dyak.render.context import build_context, normalize_lookup_key
-from dyak.render.engine import (
-    default_filename_template,
-    render_document,
-    render_filename,
-    reset_tag_warnings,
-)
-from dyak.reverse import build_template
-from dyak.reverse import format_report as format_reverse_report
 from dyak.scaffolding import init_project
-
-if TYPE_CHECKING:
-    from dyak.config import CaseForms
-    from dyak.domain import Gender
-    from dyak.reverse import ReverseReport
 
 logger = logging.getLogger(__name__)
 
@@ -77,139 +71,6 @@ def configure_stdio() -> None:
 @app.callback()
 def _main() -> None:
     """Dyak — пакетная генерация кадровых документов с русским склонением."""
-
-
-def _gender_overrides(cfg: Config) -> dict[str, Gender]:
-    """Нормализовать секцию `genders` конфига в `ключ ФИО → Gender`."""
-    result: dict[str, Gender] = {}
-    for raw_name, raw_value in cfg.genders.items():
-        gender = parse_gender(raw_value)
-        if gender is not None:
-            result[normalize_lookup_key(raw_name)] = gender
-        else:
-            logger.warning(
-                'Неизвестное значение пола «%s» для «%s» в секции `genders` — '
-                'игнорирую (ожидается м/ж/муж/жен/male/female)',
-                raw_value,
-                raw_name,
-            )
-    return result
-
-
-def _decline_surnames(cfg: Config) -> set[str]:
-    """Нормализовать `decline_surnames` в множество ключей (обход правила T027)."""
-    return {normalize_lookup_key(surname) for surname in cfg.decline_surnames}
-
-
-def _position_overrides(cfg: Config) -> dict[str, CaseForms]:
-    """Нормализовать `overrides.position` в `ключ должности → падежные формы`."""
-    return {
-        normalize_lookup_key(text): forms
-        for text, forms in cfg.overrides.position.items()
-    }
-
-
-def _rank_overrides(cfg: Config) -> dict[str, CaseForms]:
-    """Нормализовать `overrides.rank` в `ключ звания → падежные формы`."""
-    return {
-        normalize_lookup_key(text): forms for text, forms in cfg.overrides.rank.items()
-    }
-
-
-def generate_documents(
-    table: Path,
-    template: Path,
-    out: Path,
-    config: Path | None,
-    sheet: str | None,
-    filename: str | None,
-    *,
-    progress_json: bool = False,
-) -> list[Path]:
-    """Сгенерировать по документу на строку таблицы. Вернуть пути файлов."""
-    reset_tag_warnings()  # предупреждения авто-фикса тегов — раз на тег за прогон
-    cfg = load_config(config)
-    data = read_table(table, cfg, sheet)
-    out.mkdir(parents=True, exist_ok=True)
-
-    name_template = filename or default_filename_template(data.roles)
-    if name_template is None:
-        logger.warning(
-            'Не заданы --filename и не распознаны колонки ФИО — '
-            'имена файлов будут порядковыми (Документ_N.docx)',
-        )
-
-    inflector = PetrovichInflector()
-    position_inflector = PhraseInflector()
-    rank_inflector = RankInflector()
-    gender_overrides = _gender_overrides(cfg)
-    decline_surnames = _decline_surnames(cfg)
-    position_overrides = _position_overrides(cfg)
-    rank_overrides = _rank_overrides(cfg)
-    used: set[str] = set()
-    written: list[Path] = []
-    with GenerateProgress(len(data.people), json_events=progress_json) as progress:
-        for line, person in enumerate(data.people, start=1):
-            context = build_context(
-                person,
-                fullname_source=data.fullname_source,
-                roles=data.roles,
-                inflector=inflector,
-                gender_overrides=gender_overrides,
-                decline_surnames=decline_surnames,
-                position_inflector=position_inflector,
-                position_overrides=position_overrides,
-                rank_inflector=rank_inflector,
-                rank_overrides=rank_overrides,
-            )
-            base = (
-                f'Документ_{line}.docx'
-                if name_template is None
-                else render_filename(name_template, context)
-            )
-            name = unique_filename(base, used)
-            target = out / name
-            render_document(template, context, target)
-            written.append(target)
-            progress.advance(name)
-
-    logger.info('Сгенерировано документов: %d → %s', len(written), out)
-    return written
-
-
-def reverse_template(
-    doc: Path,
-    table: Path,
-    out: Path,
-    config: Path | None,
-    sheet: str | None,
-    row: int,
-) -> ReverseReport:
-    """Построить шаблон из образца и строки `row` (1-based); сохранить в `out`."""
-    reset_tag_warnings()
-    cfg = load_config(config)
-    data = read_table(table, cfg, sheet)
-    total = len(data.people)
-    if not 1 <= row <= total:
-        msg = f'Строка {row} вне диапазона (строк данных в таблице: {total})'
-        raise ReverseError(msg)
-    document, report = build_template(
-        doc,
-        data.people[row - 1],
-        fullname_source=data.fullname_source,
-        roles=data.roles,
-        inflector=PetrovichInflector(),
-        gender_overrides=_gender_overrides(cfg),
-        decline_surnames=_decline_surnames(cfg),
-        position_inflector=PhraseInflector(),
-        position_overrides=_position_overrides(cfg),
-        rank_inflector=RankInflector(),
-        rank_overrides=_rank_overrides(cfg),
-    )
-    out.parent.mkdir(parents=True, exist_ok=True)
-    document.save(str(out))
-    logger.info('Шаблон собран из строки %d → %s', row, out)
-    return report
 
 
 @app.command()
@@ -260,13 +121,15 @@ def generate(
             table,
             template,
             out,
-            config or _DEFAULT_CONFIG,
-            sheet,
-            filename,
-            progress_json=progress_json,
+            config=config or _DEFAULT_CONFIG,
+            sheet=sheet,
+            filename=filename,
+            progress_factory=lambda total: GenerateProgress(
+                total, json_events=progress_json
+            ),
         )
         pdfs = export_to_pdf(written, out) if pdf else []
-    except DyakError as exc:
+    except ChancelleryError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)
         raise typer.Exit(code=1) from exc
     suffix = f' (+ {len(pdfs)} PDF)' if pdf else ''
@@ -299,15 +162,15 @@ def check(
         report = check_table(
             data,
             template,
-            gender_overrides=_gender_overrides(cfg),
-            decline_surnames=_decline_surnames(cfg),
-            position_overrides=_position_overrides(cfg),
-            rank_overrides=_rank_overrides(cfg),
+            gender_overrides=gender_overrides(cfg),
+            decline_surnames=decline_surnames(cfg),
+            position_overrides=position_overrides(cfg),
+            rank_overrides=rank_overrides(cfg),
         )
-    except DyakError as exc:
+    except ChancelleryError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(format_report(report))
+    typer.echo(format_check_report(report))
     if report.fatal:
         raise typer.Exit(code=1)
 
@@ -373,9 +236,9 @@ def reverse(
     """Собрать docx-шаблон из готового документа и строки таблицы (best-effort)."""
     try:
         report = reverse_template(
-            doc, table, out, config or _DEFAULT_CONFIG, sheet, row
+            doc, table, out, row, config=config or _DEFAULT_CONFIG, sheet=sheet
         )
-    except DyakError as exc:
+    except ChancelleryError as exc:
         typer.echo(f'Ошибка: {exc}', err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(format_reverse_report(report))

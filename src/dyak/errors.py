@@ -1,31 +1,21 @@
-"""Доменные исключения dyak."""
+"""
+Доменные исключения «Дьяка» — то, что не уехало в `chancellery` (T033).
+
+Иерархия ошибок движка (`TableError`, `TemplateError`, `ReverseError` и
+прочие) живёт теперь в библиотеке и наследует `ChancelleryError`.
+Здесь остаются ошибки самого приложения, и их корень `DyakError`
+подвешен под библиотечный — тогда один `except ChancelleryError` в CLI
+ловит оба слоя: и сбой движка, и сбой приложения.
+"""
 
 from __future__ import annotations
 
-
-class DyakError(Exception):
-    """Базовое исключение dyak — все ожидаемые ошибки наследуют его."""
+from chancellery import ChancelleryError
 
 
-class ConfigError(DyakError):
-    """Ошибка конфигурации (`dyak.yaml`)."""
-
-
-class TableError(DyakError):
-    """Ошибка чтения/валидации входной таблицы."""
-
-
-class TemplateError(DyakError):
-    """Ошибка рендера шаблона (базовая): напр. неприменимый фильтр."""
-
-
-class UndefinedVariableError(TemplateError):
-    """Шаблон ссылается на неизвестную переменную (`StrictUndefined`)."""
+class DyakError(ChancelleryError):
+    """Базовое исключение приложения «Дьяк» (PDF, scaffold, CLI)."""
 
 
 class PdfExportError(DyakError):
     """Ошибка экспорта в PDF (LibreOffice не найден или конвертация упала)."""
-
-
-class ReverseError(DyakError):
-    """Ошибка обратной генерации шаблона (`dyak reverse`): образец не читается."""

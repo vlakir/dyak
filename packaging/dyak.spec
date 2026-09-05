@@ -29,10 +29,12 @@ datas = [(os.path.join(SRC, 'dyak', 'gui', 'assets'), 'dyak/gui/assets')]
 binaries = []
 hiddenimports = []
 
-# Package-data зависимостей ядра (склонение ФИО/должностей). Без них бандл
+# Package-data зависимостей движка (склонение ФИО/должностей). Без них бандл
 # падает на petrovich/rules/rules.json и словарях pymorphy3 (выявлено
-# спайком T010).
-for _pkg in ('petrovich', 'pymorphy3', 'pymorphy3_dicts_ru'):
+# спайком T010). Сам движок с T033 живёт в `chancellery`; она собрана тем же
+# collect_all, хотя своих данных не имеет — страховка от динамических
+# импортов внутри неё, проверить которые можно только сборкой под Windows.
+for _pkg in ('chancellery', 'petrovich', 'pymorphy3', 'pymorphy3_dicts_ru'):
     _d, _b, _h = collect_all(_pkg)
     datas += _d
     binaries += _b
