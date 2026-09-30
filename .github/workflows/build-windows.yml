@@ -120,12 +120,14 @@ jobs:
         with:
           name: dyak-setup
           path: dyak-*-setup.exe
+          retention-days: 7
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: dyak-portable
           path: dyak-*-portable.exe
+          retention-days: 7
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
