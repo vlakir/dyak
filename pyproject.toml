@@ -53,6 +53,7 @@ exclude = [
     "build",
     "dist",
     "tests",
+    ".worktrees",
 ]
 
 
