@@ -25,6 +25,12 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 
 ## [Unreleased]
 
+### Changed
+
+- Гейты srv идут в одноразовом клоне (T037): `gates.yml` запускает прежние
+  `uv sync --locked` и `scripts/gates.sh` через `srv-gates-run` (srv-ci T026);
+  прежние Docker-задания — в ручном `gates-docker.yml`.
+
 <!-- Что накопилось с момента последнего релиза/значимой точки. -->
 
 ---
