@@ -27,6 +27,8 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 
 ### Changed
 
+- Удалён мёртвый ручной `gates-docker.yml` (T038): Docker-раннер srv (VM 120)
+  удалён 14.10.2026, гейты — только `gates.yml` в одноразовом клоне.
 - Гейты srv идут в одноразовом клоне (T037): `gates.yml` запускает прежние
   `uv sync --locked` и `scripts/gates.sh` через `srv-gates-run` (srv-ci T026);
   прежние Docker-задания — в ручном `gates-docker.yml`.
