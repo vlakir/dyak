@@ -27,6 +27,17 @@ T-ID между релизами — `CHANGELOG.md` единственное per
 
 ### Changed
 
+- Завершён репозиторный ручной native-перенос методики
+  dreamteam 2.0 (T039): девять ролей, lead-only вопросы, RO architect/reviewer,
+  spec/clarify/analyze/status/handoff и сохранение незавершённого контекста.
+  После actual-content review и повторной byte/hash/mode-проверки originals
+  удалён legacy CLAUDE, provenance 2.0.0; исправлено условие cold activation.
+  Native repeat rc=0, не full noop; приложение, стек, lock и CI не менялись.
+  Репозиторные AC приняты 2026-10-17: финальное semantic review R3 без
+  замечаний, полный srv CI кандидата e25239b PASS (80 passed, 2 skipped,
+  coverage 92.94%). Доставка итогового squash требует отдельного full CI
+  и PR review; cold activation исходного checkout не выполнена и требует
+  отдельного согласованного окна. Evidence: specs/T039-dreamteam-200/acceptance.md.
 - Удалён мёртвый ручной `gates-docker.yml` (T038): Docker-раннер srv (VM 120)
   удалён 14.10.2026, гейты — только `gates.yml` в одноразовом клоне.
 - Гейты srv идут в одноразовом клоне (T037): `gates.yml` запускает прежние

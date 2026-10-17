@@ -22,6 +22,25 @@ ADR-Lite: компактный лог архитектурных решений 
 
 ## Решения проекта
 
+### 2026-10-17 — Ручной native перенос методики без изменения приложения (T039)
+
+- **Контекст:** старый provenance 1.5.1 и CLAUDE-канон нельзя выдавать за
+  полностью применённый dreamteam 2.0. CLI dry-run до переноса вернул rc=2;
+  это не подтверждение успешного managed update.
+- **Решение:** FULL MANUAL: каждому из 28 реальных render paths и actualcustom
+  назначить native purpose; сохранить доменные правила, immutable CONCEPT,
+  authoranswers и backlog. Сначала byte-verified private originals и review
+  actual native содержания, потом отдельным новым раундом provenance и
+  деактивация. R2 — preparatory checkpoint, не task acceptance.
+- **Альтернативы:** force/замена всех файлов scaffold — потеря проекта;
+  CLI PASS/noop вместо семантической приёмки — ложное доказательство;
+  fake src/main.py/test_main.py — загрязнение бизнес-кода.
+- **Последствия:** chancellery/dyak/letopis, стек, lock и CI неизменны;
+  девять native ролей, только лид задаёт вопросы, architect/reviewer без
+  edit/bash. Actual repeat и offline effective validation не равны cold
+  activation. Модели/провайдеры/global settings не меняются. Подробности и
+  незавершённые критерии — specs/T039-dreamteam-200/.
+
 ### 2026-10-13 — Гейты в одноразовом клоне srv (T037)
 
 - **Контекст:** постоянный Docker-раннер srv уходит; состав проверок не меняется.
@@ -1066,4 +1085,3 @@ ADR-Lite: компактный лог архитектурных решений 
   (§6 `CONCEPT.md`) — движки заменяемы. Составные должности
   («заместитель генерального директора») автоматика берёт неидеально —
   escape-hatch через `overrides` + отчёт `check`.
-
