@@ -20,7 +20,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
         branch=${remote_ref##refs/heads/}
         echo "✖ Direct push to '$branch' is forbidden by project policy." >&2
         echo "  Use a feature branch and PR/MR instead." >&2
-        echo "  See CLAUDE.md → Git workflow." >&2
+        echo "  See AGENTS.md → Git workflow." >&2
         echo "  Bypass: git push --no-verify (only if you really mean it)." >&2
         exit 1
     fi

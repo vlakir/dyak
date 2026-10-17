@@ -135,13 +135,15 @@ GUI вызывает ядро тем же exe через subprocess и в соб
 ## Проверки перед push
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src
-uv run pytest
+VIRTUAL_ENV="$PWD/.venv" uv sync --locked
+VIRTUAL_ENV="$PWD/.venv" scripts/gates.sh --light
 ```
 
-Все четыре должны проходить с 0 ошибок. Обходные манёвры (`# noqa`,
+Локально — лёгкие ruff check / format / mypy. Полный pytest с покрытием ≥80%
+идёт существующим Forgejo workflow `gates` в одноразовом клоне srv; merge
+только после зелёного полного CI итогового commit и review. Локальный full
+нужен для работы без VPN/отладки и сериализуется между worktrees.
+Обходные манёвры (`# noqa`,
 `# type: ignore`, расширение `ignore`-секции) — только по согласованию.
 
 Отдельно — **гейт регрессии на `examples/`** (T033). Он не входит в
@@ -169,7 +171,8 @@ PYTHONPATH=src uv run python scripts/snapshot_examples.py /tmp/snap \
 - `BACKLOG.md` — парковка идей и побочных находок.
 - `CHANGELOG.md` — журнал заметных изменений.
 - `specs/` — спецификации крупных фич.
-- `CLAUDE.md` — проектные правила для Claude (Claude Code).
+- `AGENTS.md` — активный канон методики native OpenCode.
+- `.opencode/agents/`, `.opencode/commands/` — девять ролей и управляющие команды.
 
 ## Методика работы
 
@@ -177,6 +180,30 @@ PYTHONPATH=src uv run python scripts/snapshot_examples.py /tmp/snap \
 [vlakir/dreamteam](https://github.com/vlakir/dreamteam). Подробное
 описание методики (scope discipline, ритуал spec/clarify/analyze для
 крупных фич, pre-push контроль) — см. репозиторий шаблона.
+
+### Ручной перенос 2.0 — T039
+
+Native команды `/spec`, `/clarify`, `/analyze`, `/status`, `/handoff` ведут
+реальную задачу и её незавершённые AC. Вопросы пользователю задаёт только
+primary tech-lead; architect/reviewer — read-only, остальные исполнители
+работают по назначенному scope. Публичное имя команды/проекта — `dyak`.
+Граница chancellery / dyak / letopis не меняется; T009 остаётся открытой.
+
+После actual-content review и повторной проверки 72 private originals
+в R3 удалён legacy `CLAUDE.md`, provenance переведён на 2.0.0; существующие
+публичные и авторские ответы сохранены. Normal native dry-run повторён:
+rc=0, 1 formatting-only change answers, 24 unchanged, 3 generic ADD
+(pytest guard и два business seed), без removed/conflicts. Это не full noop
+и не автоматическое применение шаблона. Репозиторные AC T039 приняты
+2026-10-17 после финального semantic review R3 без замечаний и полного srv CI
+кандидата e25239b (80 passed, 2 skipped, coverage 92.94%). Это не публикация:
+итоговый squash требует собственного full CI и GitHub PR review; evidence —
+[`acceptance.md`](specs/T039-dreamteam-200/acceptance.md).
+Полный inventory/ручные решения/evidence/rollback —
+[`specs/T039-dreamteam-200/mapping.md`](specs/T039-dreamteam-200/mapping.md).
+Новые файлы runtime не hot-reload: активный сервер не перезапускается.
+Cold activation исходного checkout — отдельный согласованный шаг после
+интеграции, финального review/CI; текущий checkpoint её не разрешает.
 
 <!-- Ниже добавляются проект-специфичные разделы: API, развёртывание,
      схемы БД, документация модулей, контакты и т.п. -->

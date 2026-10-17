@@ -65,6 +65,20 @@ ID уже даёт идентификацию). Имя PR: `T<NNN>: <title>`. С
 
 ## Done
 
+- **T039** — Ручной перенос методики dreamteam 2.0 на native OpenCode.
+  Репозиторные AC приняты 2026-10-17: все 28 managed + actualcustom связаны
+  с native назначением; девять ролей/пять команд, lead-only question и RO
+  ограничения проверены offline; незавершённый контекст сохранён.
+  Авторская byte/hash/mode-проверка 72 private originals до деактивации
+  зафиксирована, независимой проверкой backup не объявляется.
+  Normal repeat rc=0: formatting-only answers + 3 generic ADD, не full noop.
+  Финальное semantic review R3: no findings, M1 исправлен; полный srv CI
+  кандидата e25239b — PASS (80 passed, 2 skipped, coverage 92.94%).
+  Приложение/стек/lock/CI и примеры не менялись; T009 остаётся открытой.
+  Доставка не заявлена: итоговый squash требует своего full CI и PR review;
+  cold activation исходного checkout — отдельное согласованное окно.
+  Evidence: `specs/T039-dreamteam-200/acceptance.md`.
+
 <!-- Закрытые задачи, ждущие переноса в CHANGELOG.md при следующем
      релизе или значимой точке. После переноса — очищаем. -->
 
